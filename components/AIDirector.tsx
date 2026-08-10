@@ -658,6 +658,7 @@ setProgressStatus(
 
 <ProductionGeneratorEngine
   idea={idea}
+  imageProvider={provider}
 
   imagePrompts={storyData.scenes.map(
     (scene: SceneData) =>

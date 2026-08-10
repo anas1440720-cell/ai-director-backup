@@ -15,6 +15,8 @@ type ProductionGeneratorProps = {
 
   musicTimeline: string[];
 
+  imageProvider?: "gemini" | "openai" | "claude";
+
   onImageGenerated?: (index: number) => void;
 
   onVideoGenerated?: (index: number) => void;
@@ -28,6 +30,7 @@ export default function ProductionGeneratorEngine({
   videoPrompts,
   voiceScripts,
   musicTimeline,
+  imageProvider = "gemini",
   onImageGenerated,
   onVideoGenerated,
   onGenerationError,
@@ -61,7 +64,8 @@ export default function ProductionGeneratorEngine({
 
     try {
       const result = await generateImageAsset(
-        imagePrompts[index]
+        imagePrompts[index],
+        imageProvider
       );
 
       setImages((prev) => {
@@ -88,7 +92,6 @@ export default function ProductionGeneratorEngine({
       setLoadingImageIndex(null);
     }
   };
-
   const waitForVideo = async (
     operationName: string,
     index: number

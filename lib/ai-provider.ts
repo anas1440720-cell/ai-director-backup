@@ -2,6 +2,30 @@ import { GoogleGenAI } from "@google/genai";
 
 export type AIProvider = "openai" | "gemini" | "claude";
 
+export type AIProviderConfig = {
+  id: AIProvider;
+  name: string;
+  available: boolean;
+};
+
+export const AI_PROVIDERS: AIProviderConfig[] = [
+  {
+    id: "gemini",
+    name: "Google Gemini",
+    available: true,
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    available: false,
+  },
+  {
+    id: "claude",
+    name: "Anthropic Claude",
+    available: false,
+  },
+];
+
 export type GenerateStoryResult = {
   provider: string;
   success: boolean;

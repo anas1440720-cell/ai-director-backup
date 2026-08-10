@@ -45,31 +45,44 @@ function getGeminiClient() {
   });
 }
 
+function getProviderConfig(provider: AIProvider) {
+  return AI_PROVIDERS.find((item) => item.id === provider);
+}
+
 export async function generateStory(
   provider: AIProvider,
   idea: string
 ): Promise<GenerateStoryResult> {
+  const config = getProviderConfig(provider);
+
+  if (!config) {
+    throw new Error(`Unknown AI Provider: ${provider}`);
+  }
+
+  if (!config.available) {
+    return {
+      provider: config.name,
+      success: false,
+      text: "",
+      message: `${config.name} is not connected yet.`,
+    };
+  }
+
   switch (provider) {
     case "gemini":
       return generateWithGemini(idea);
 
     case "openai":
-  return {
-    provider: "OpenAI",
-    success: false,
-    text: "",
-    message: "OpenAI not connected yet.",
-  };
+    case "claude":
+      return {
+        provider: config.name,
+        success: false,
+        text: "",
+        message: `${config.name} is not connected yet.`,
+      };
 
-case "claude":
-  return {
-    provider: "Claude",
-    success: false,
-    text: "",
-    message: "Claude not connected yet.",
-  };
     default:
-      throw new Error("Unknown AI Provider");
+      throw new Error(`Unknown AI Provider: ${provider}`);
   }
 }
 

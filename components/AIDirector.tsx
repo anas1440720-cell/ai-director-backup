@@ -52,7 +52,9 @@ export default function AIDirector({ idea }: Props) {
   const [goal, setGoal] = useState("");
   const [character, setCharacter] = useState("");
   const [style, setStyle] = useState("");
-
+const [provider, setProvider] = useState<
+  "gemini" | "openai" | "claude"
+>("gemini");
   const [activeTab, setActiveTab] = useState("story");
 const [videoReady, setVideoReady] = useState(false);
 const [voiceReady, setVoiceReady] = useState(false);
@@ -100,9 +102,10 @@ useEffect(() => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          idea,
-        }),
+       body: JSON.stringify({
+  idea,
+  provider,
+}),
       });
 
       const data = await response.json();
@@ -538,9 +541,10 @@ setGeneratedVideoCount(0);
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        idea,
-      }),
+    body: JSON.stringify({
+  idea,
+  provider,
+}),
     });
 
     const storyData = await storyResponse.json();

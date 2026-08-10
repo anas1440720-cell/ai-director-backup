@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 
-type ImageProvider = "gemini" | "openai" | "claude";
+type ImageProvider = "pollinations";
 
 type GenerateImageResult = {
   provider: string;
@@ -10,85 +9,74 @@ type GenerateImageResult = {
   message?: string;
 };
 
-const IMAGE_PROVIDERS: {
-  id: ImageProvider;
-  name: string;
-  available: boolean;
-}[] = [
-  {
-    id: "gemini",
-    name: "Google Gemini",
-    available: true,
-  },
-  {
-    id: "openai",
-    name: "OpenAI",
-    available: false,
-  },
-  {
-    id: "claude",
-    name: "Anthropic Claude",
-    available: false,
-  },
-];
-
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+async function generateWithPollinations(
+  prompt: string
+): Promise<GenerateImageResult> {
+  const apiKey = process.env.POLLINATIONS_API_KEY;
 
   if (!apiKey) {
     throw new Error(
-      "GEMINI_API_KEY is missing from .env.local"
+      "POLLINATIONS_API_KEY is missing from .env.local"
     );
   }
 
-  return new GoogleGenAI({
-    apiKey,
+  const encodedPrompt = encodeURIComponent(prompt);
+
+  const url =
+    `https://gen.pollinations.ai/image/${encodedPrompt}` +
+    `?model=flux` +
+    `&width=1024` +
+    `&height=1024` +
+    `&nologo=true`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    cache: "no-store",
   });
-}
 
-function getImageProvider(
-  provider: ImageProvider
-) {
-  return IMAGE_PROVIDERS.find(
-    (item) => item.id === provider
-  );
-}
+  if (!response.ok) {
+    const errorText = await response.text();
 
-async function generateWithGemini(
-  prompt: string
-): Promise<GenerateImageResult> {
-  const ai = getGeminiClient();
+    console.error(
+      "Pollinations Image Error:",
+      response.status,
+      errorText
+    );
 
-  const response =
-    await ai.models.generateContent({
-      model: "gemini-3.1-flash-image",
-      contents: prompt,
-      config: {
-        responseModalities: ["IMAGE"],
-      },
-    });
-
-  const parts =
-    response.candidates?.[0]?.content?.parts ?? [];
-
-  for (const part of parts) {
-    if (part.inlineData?.data) {
+    if (response.status === 429) {
       return {
-        provider: "Gemini",
-        success: true,
-        image: `data:${
-          part.inlineData.mimeType ||
-          "image/png"
-        };base64,${part.inlineData.data}`,
+        provider: "Pollinations",
+        success: false,
+        message:
+          "Pollinations image quota or rate limit reached.",
       };
     }
+
+    return {
+      provider: "Pollinations",
+      success: false,
+      message:
+        `Pollinations image generation failed (${response.status}).`,
+    };
   }
 
+  const contentType =
+    response.headers.get("content-type") ||
+    "image/png";
+
+  const imageBuffer = await response.arrayBuffer();
+
+  const base64 = Buffer.from(imageBuffer).toString(
+    "base64"
+  );
+
   return {
-    provider: "Gemini",
-    success: false,
-    message:
-      "Gemini did not return an image.",
+    provider: "Pollinations",
+    success: true,
+    image: `data:${contentType};base64,${base64}`,
   };
 }
 
@@ -96,44 +84,9 @@ async function generateImage(
   provider: ImageProvider,
   prompt: string
 ): Promise<GenerateImageResult> {
-  const config = getImageProvider(provider);
-
-  if (!config) {
-    return {
-      provider,
-      success: false,
-      message: "Unknown image provider.",
-    };
-  }
-
-  if (!config.available) {
-    return {
-      provider: config.name,
-      success: false,
-      message:
-        `${config.name} image generation is not connected yet.`,
-    };
-  }
-
   switch (provider) {
-    case "gemini":
-      return generateWithGemini(prompt);
-
-    case "openai":
-      return {
-        provider: "OpenAI",
-        success: false,
-        message:
-          "OpenAI image generation is not connected yet.",
-      };
-
-    case "claude":
-      return {
-        provider: "Claude",
-        success: false,
-        message:
-          "Claude image generation is not connected yet.",
-      };
+    case "pollinations":
+      return generateWithPollinations(prompt);
 
     default:
       return {
@@ -144,28 +97,21 @@ async function generateImage(
   }
 }
 
-export async function POST(
-  request: Request
-) {
+export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    if (
-      !body.prompt ||
-      !body.prompt.trim()
-    ) {
+    if (!body.prompt || !body.prompt.trim()) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Image prompt is required.",
+          message: "Image prompt is required.",
         },
         { status: 400 }
       );
     }
 
-    const provider: ImageProvider =
-      body.provider || "gemini";
+    const provider: ImageProvider = "pollinations";
 
     const result = await generateImage(
       provider,
@@ -177,9 +123,8 @@ export async function POST(
         result,
         {
           status:
-            result.message?.includes(
-              "quota"
-            )
+            result.message?.includes("quota") ||
+            result.message?.includes("rate limit")
               ? 429
               : 500,
         }
@@ -189,36 +134,17 @@ export async function POST(
     return NextResponse.json(result);
   } catch (error) {
     console.error(
-      "Image Provider Error:",
+      "Pollinations Image Provider Error:",
       error
     );
-
-    const status =
-      error &&
-      typeof error === "object" &&
-      "status" in error &&
-      typeof error.status === "number"
-        ? error.status
-        : 500;
-
-    if (status === 429) {
-      return NextResponse.json(
-        {
-          provider: "Gemini",
-          success: false,
-          status: "quota_exceeded",
-          message:
-            "Gemini image generation quota exceeded. Please try another image provider.",
-        },
-        { status: 429 }
-      );
-    }
 
     return NextResponse.json(
       {
         success: false,
         message:
-          "Image generation failed.",
+          error instanceof Error
+            ? error.message
+            : "Image generation failed.",
       },
       { status: 500 }
     );

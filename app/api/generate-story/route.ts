@@ -15,10 +15,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await generateStory(
-      "gemini",
-      body.idea
-    );
+  const provider =
+  body.provider === "openai" ||
+  body.provider === "claude" ||
+  body.provider === "gemini"
+    ? body.provider
+    : "gemini";
+
+const result = await generateStory(
+  provider,
+  body.idea
+);
 
     if (!result.success || !("text" in result)) {
       return NextResponse.json(result);

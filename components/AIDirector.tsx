@@ -12,7 +12,7 @@ import VoiceEngine from "./engines/VoiceEngine";
 import DirectorBrain from "./engines/DirectorBrain";
 
 import SceneBuilderEngine from "./engines/SceneBuilderEngine";
-import ImagePromptEngine from "./engines/ImagePromptEngine";
+import { buildImagePrompt } from "./engines/ImagePromptEngine";
 import VideoPromptEngine from "./engines/VideoPromptEngine";
 import VoiceScriptEngine from "./engines/VoiceScriptEngine";
 import MusicTimelineEngine from "./engines/MusicTimelineEngine";
@@ -660,10 +660,9 @@ setProgressStatus(
   idea={idea}
   imageProvider={provider}
 
-  imagePrompts={storyData.scenes.map(
-    (scene: SceneData) =>
-      `Ultra realistic cinematic shot, ${scene.visual}, ${scene.camera}, professional lighting`
-  )}
+imagePrompts={storyData.scenes.map(
+  (scene: SceneData) => buildImagePrompt(scene)
+)}
 
   videoPrompts={storyData.scenes.map(
     (scene: SceneData) =>

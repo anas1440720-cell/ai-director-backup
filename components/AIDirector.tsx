@@ -729,7 +729,7 @@ if (newCount >= totalScenes) {
   console.error("🎬 Generation error:", message);
 
   setProgressStatus(message);
-
+setIsGenerating(false);
   setLogs((prev) => [
     ...prev,
     `❌ ${message}`,

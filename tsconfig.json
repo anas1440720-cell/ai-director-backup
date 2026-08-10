@@ -14,19 +14,17 @@
     "module": "esnext",
     "moduleResolution": "bundler",
 
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
 
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
+"resolveJsonModule": true,
+"isolatedModules": true,
+"jsx": "react-jsx",
+"incremental": true,
 
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    },
+"paths": {
+  "@/*": [
+    "./*"
+  ]
+},
 
     "plugins": [
       {

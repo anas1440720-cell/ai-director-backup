@@ -2,44 +2,58 @@ import { GoogleGenAI } from "@google/genai";
 
 export type AIProvider = "openai" | "gemini" | "claude";
 
-const apiKey = process.env.GEMINI_API_KEY;
+export type GenerateStoryResult = {
+  provider: string;
+  success: boolean;
+  text: string;
+  message?: string;
+};
 
-if (!apiKey) {
-  throw new Error("GEMINI_API_KEY is missing from .env.local");
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is missing from .env.local");
+  }
+
+  return new GoogleGenAI({
+    apiKey,
+  });
 }
-
-const ai = new GoogleGenAI({
-  apiKey,
-});
 
 export async function generateStory(
   provider: AIProvider,
   idea: string
-) {
+): Promise<GenerateStoryResult> {
   switch (provider) {
     case "gemini":
       return generateWithGemini(idea);
 
     case "openai":
-      return {
-        provider: "OpenAI",
-        success: false,
-        message: "OpenAI not connected yet.",
-      };
+  return {
+    provider: "OpenAI",
+    success: false,
+    text: "",
+    message: "OpenAI not connected yet.",
+  };
 
-    case "claude":
-      return {
-        provider: "Claude",
-        success: false,
-        message: "Claude not connected yet.",
-      };
-
+case "claude":
+  return {
+    provider: "Claude",
+    success: false,
+    text: "",
+    message: "Claude not connected yet.",
+  };
     default:
       throw new Error("Unknown AI Provider");
   }
 }
 
-async function generateWithGemini(idea: string) {
+async function generateWithGemini(
+  idea: string
+): Promise<GenerateStoryResult> {
+  const ai = getGeminiClient();
+
   const response = await ai.models.generateContent({
     model: "gemini-3.6-flash",
     contents: `

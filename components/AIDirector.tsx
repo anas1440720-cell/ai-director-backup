@@ -355,7 +355,15 @@ useEffect(() => {
     ["🧸 Pixar Style", "Pixar"],
     ["🖼 Fantasy Epic", "Fantasy"],
   ];
-
+const providers: [
+  string,
+  "gemini" | "openai" | "claude",
+  boolean
+][] = [
+  ["Google Gemini", "gemini", true],
+  ["OpenAI", "openai", false],
+  ["Anthropic Claude", "claude", false],
+];
 
 
   return (
@@ -380,7 +388,48 @@ useEffect(() => {
           <h2 className="text-3xl font-bold text-white">
             🎬 AI Director
           </h2>
+<div className="mt-6">
+  <p className="mb-3 text-sm font-semibold text-gray-300">
+    AI Provider
+  </p>
 
+  <div className="grid gap-3 sm:grid-cols-3">
+    {providers.map(([label, providerId, available]) => (
+      <button
+        key={providerId}
+        type="button"
+        disabled={!available}
+        onClick={() => setProvider(providerId)}
+        className={`
+          rounded-2xl
+          border
+          px-4
+          py-4
+          text-left
+          transition
+          ${
+            provider === providerId
+              ? "border-cyan-400 bg-cyan-400/10"
+              : "border-white/10 bg-white/5"
+          }
+          ${
+            available
+              ? "hover:border-cyan-400/50"
+              : "cursor-not-allowed opacity-40"
+          }
+        `}
+      >
+        <div className="font-semibold text-white">
+          {label}
+        </div>
+
+        <div className="mt-1 text-xs text-gray-400">
+          {available ? "Available" : "Coming soon"}
+        </div>
+      </button>
+    ))}
+  </div>
+</div>
           <p className="mt-3 text-gray-400">
             Welcome! I'll direct your movie like a Hollywood director.
           </p>

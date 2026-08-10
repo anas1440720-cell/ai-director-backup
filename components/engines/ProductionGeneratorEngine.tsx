@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { generateImage as generateImageAsset } from "@/lib/imageGenerator";
+
 type ProductionGeneratorProps = {
   idea: string;
 
@@ -45,52 +47,29 @@ export default function ProductionGeneratorEngine({
     useState<number | null>(null);
 
   const [error, setError] = useState<string | null>(null);
-const generateImage = async (index: number) => {
-  if (
-    loadingImageIndex !== null ||
-    loadingVideoIndex !== null
-  ) {
-    return;
-  }
 
-  setLoadingImageIndex(index);
-  setError(null);
+  const generateImage = async (index: number) => {
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null
+    ) {
+      return;
+    }
 
-  try {
-    const response = await fetch(
-      "/api/generate-image",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: imagePrompts[index],
-        }),
-      }
-    );
-      const data = await response.json();
+    setLoadingImageIndex(index);
+    setError(null);
 
-if (
-  response.status === 429 ||
-  data.status === "quota_exceeded"
-) {
-  throw new Error(
-    "⚠️ Image generation is temporarily unavailable because the AI image quota has been reached."
-  );
-}
-
-if (!response.ok || !data.success || !data.image) {
-  throw new Error(
-    data.message || "Image generation failed."
-  );
-}
+    try {
+      const result = await generateImageAsset(
+        imagePrompts[index]
+      );
 
       setImages((prev) => {
         const updated = [...prev];
-        updated[index] = data.image;
+        updated[index] = result.imageUrl;
         return updated;
       });
+
       onImageGenerated?.(index);
     } catch (err) {
       console.error(
@@ -98,16 +77,13 @@ if (!response.ok || !data.success || !data.image) {
         err
       );
 
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : "Image generation failed."
-      );
-      onGenerationError?.(
-  err instanceof Error
-    ? err.message
-    : "Image generation failed."
-);
+          : "Image generation failed.";
+
+      setError(message);
+      onGenerationError?.(message);
     } finally {
       setLoadingImageIndex(null);
     }

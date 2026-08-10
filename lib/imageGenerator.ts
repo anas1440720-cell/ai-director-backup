@@ -17,27 +17,52 @@ export async function generateImage(
     };
   }
 
-  const response = await fetch("/api/generate-image", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  try {
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: cleanPrompt,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (
+      response.status === 429 ||
+      data.status === "quota_exceeded"
+    ) {
+      throw new Error(
+        "Image generation quota exceeded."
+      );
+    }
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.message || "Image generation failed."
+      );
+    }
+
+    const imageUrl = data.image || data.imageUrl || "";
+
+    if (!imageUrl) {
+      throw new Error(
+        "Image generation succeeded but no image was returned."
+      );
+    }
+
+    return {
       prompt: cleanPrompt,
-    }),
-  });
+      imageUrl,
+      status: "generated",
+    };
+  } catch (error) {
+    console.error("Image generation error:", error);
 
-  const data = await response.json();
-
-  if (!response.ok || !data.success) {
-    throw new Error(
-      data.message || "Image generation failed."
-    );
+    throw error instanceof Error
+      ? error
+      : new Error("Image generation failed.");
   }
-
-  return {
-    prompt: cleanPrompt,
-    imageUrl: data.imageUrl,
-    status: "generated",
-  };
 }

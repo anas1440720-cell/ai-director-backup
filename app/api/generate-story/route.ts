@@ -15,17 +15,17 @@ export async function POST(request: Request) {
       );
     }
 
-  const provider =
-  body.provider === "openai" ||
-  body.provider === "claude" ||
-  body.provider === "gemini"
-    ? body.provider
-    : "gemini";
+    const provider =
+      body.provider === "openai" ||
+      body.provider === "claude" ||
+      body.provider === "gemini"
+        ? body.provider
+        : "gemini";
 
-const result = await generateStory(
-  provider,
-  body.idea
-);
+    const result = await generateStory(
+      provider,
+      body.idea
+    );
 
     if (!result.success || !("text" in result)) {
       return NextResponse.json(result);
@@ -53,13 +53,27 @@ const result = await generateStory(
     return NextResponse.json({
       success: true,
       provider: result.provider,
-      hook: json.hook || "",
-      scenes: Array.isArray(json.scenes)
-        ? json.scenes
-        : [],
+
+      hook:
+        typeof json.hook === "string"
+          ? json.hook
+          : "",
+
+      characters:
+        Array.isArray(json.characters)
+          ? json.characters
+          : [],
+
+      scenes:
+        Array.isArray(json.scenes)
+          ? json.scenes
+          : [],
     });
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error(
+      "Gemini API Error:",
+      error
+    );
 
     const status =
       error &&

@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
-
-const apiKey = process.env.GEMINI_API_KEY;
-
-if (!apiKey) {
-  throw new Error("GEMINI_API_KEY is missing from .env.local");
-}
-
-const ai = new GoogleGenAI({
-  apiKey,
-});
+import { fal } from "@fal-ai/client";
 
 export async function POST(req: Request) {
   try {
-    const { prompt } = await req.json();
+    const { prompt, imageUrl } = await req.json();
 
     if (!prompt || !prompt.trim()) {
       return NextResponse.json(
@@ -25,49 +15,149 @@ export async function POST(req: Request) {
       );
     }
 
-    const operation = await ai.models.generateVideos({
-      model: "veo-3.1-generate-preview",
-      prompt: prompt.trim(),
-      config: {
-        aspectRatio: "16:9",
-        resolution: "720p",
-        numberOfVideos: 1,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      status: "processing",
-      operationName: operation.name,
-      message: "Video generation started.",
-    });
-  } catch (error) {
-    console.error("Gemini Video API Error:", error);
-
-    const status =
-      error &&
-      typeof error === "object" &&
-      "status" in error &&
-      typeof error.status === "number"
-        ? error.status
-        : 500;
-
-    if (status === 429) {
+    if (!imageUrl || !imageUrl.trim()) {
       return NextResponse.json(
         {
           success: false,
-          status: "quota_exceeded",
-          message:
-            "Gemini video generation quota exceeded. Please try again later.",
+          message: "Image URL is required.",
         },
-        { status: 429 }
+        { status: 400 }
       );
     }
+
+    const falKey = process.env.FAL_KEY;
+
+    if (!falKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "FAL_KEY is missing from .env.local",
+        },
+        { status: 500 }
+      );
+    }
+
+    fal.config({
+      credentials: falKey,
+    });
+
+    console.log("🎬 Preparing image for fal...");
+
+    let falImageUrl = imageUrl.trim();
+
+    /*
+     * If the image is a Base64 data URL,
+     * upload it to fal storage first.
+     */
+    if (falImageUrl.startsWith("data:image/")) {
+      const match = falImageUrl.match(
+        /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/
+      );
+
+      if (!match) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid Base64 image data.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const mimeType = match[1];
+      const base64Data = match[2];
+
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const imageBlob = new Blob([buffer], {
+        type: mimeType,
+      });
+
+      console.log("☁️ Uploading image to fal storage...");
+
+      falImageUrl = await fal.storage.upload(imageBlob);
+
+      console.log(
+        "✅ Image uploaded to fal storage."
+      );
+    }
+
+    console.log(
+      "🎬 Starting fal video generation..."
+    );
+
+    const result = await fal.subscribe(
+      "bytedance/seedance-2.0/image-to-video",
+      {
+        input: {
+          prompt: prompt.trim(),
+          image_url: falImageUrl,
+          resolution: "720p",
+          duration: "4",
+          aspect_ratio: "16:9",
+          generate_audio: false,
+        },
+
+        logs: true,
+
+        onQueueUpdate: (update) => {
+          if (update.status === "IN_PROGRESS") {
+            update.logs?.forEach((log) => {
+              console.log(
+                "🎬 fal:",
+                log.message
+              );
+            });
+          }
+        },
+      }
+    );
+
+    const videoUrl = result.data?.video?.url;
+
+    if (!videoUrl) {
+      console.error(
+        "fal returned no video:",
+        result.data
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "fal completed generation but returned no video URL.",
+        },
+        { status: 500 }
+      );
+    }
+
+    console.log(
+      "✅ fal video generated successfully."
+    );
+
+    return NextResponse.json({
+      success: true,
+      status: "completed",
+      provider: "fal",
+      model:
+        "bytedance/seedance-2.0/image-to-video",
+      videoUri: videoUrl,
+    });
+  } catch (error) {
+    console.error(
+      "fal Video API Error:",
+      error
+    );
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "fal video generation failed.";
 
     return NextResponse.json(
       {
         success: false,
-        message: "Video generation failed.",
+        message,
       },
       { status: 500 }
     );

@@ -41,14 +41,13 @@ export default function SceneRegenerationEngine({
       const data = await response.json();
 
       if (!response.ok || !data.success || !data.scene) {
-        console.error("Scene regeneration failed:", data);
         setError(data.message || "Scene regeneration failed.");
         return;
       }
 
       onRegenerate(data.scene);
-    } catch (error) {
-      console.error("Scene regeneration error:", error);
+    } catch (err) {
+      console.error("Scene regeneration error:", err);
       setError("Unable to regenerate scene.");
     } finally {
       setLoading(false);
@@ -56,53 +55,44 @@ export default function SceneRegenerationEngine({
   };
 
   return (
-    <div className="mt-6 rounded-2xl border border-orange-500/30 bg-orange-500/10 p-6">
+    <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-6">
       <h3 className="text-xl font-bold text-white">
         🔄 Scene Regeneration Engine
       </h3>
 
-      <p className="mt-3 text-gray-300">
-        AI will regenerate this scene only.
+      <p className="mt-1 text-xs text-gray-300">
+        AI will rewrite and reframe this specific scene while preserving overall narrative continuity.
       </p>
 
-      <div className="mt-6 space-y-3 text-gray-200">
+      <div className="mt-5 space-y-2 rounded-xl bg-black/40 p-4 text-xs text-gray-200">
         <p>
-          🎬 <span className="font-bold">Scene:</span>{" "}
-          {scene.title}
+          <span className="font-bold text-white">🎬 Scene:</span> {scene.title}
         </p>
-
         <p>
-          🖼 <span className="font-bold">Visual:</span>{" "}
-          {scene.visual}
+          <span className="font-bold text-cyan-300">🖼 Visual:</span> {scene.visual}
         </p>
-
         <p>
-          🎥 <span className="font-bold">Camera:</span>{" "}
-          {scene.camera}
+          <span className="font-bold text-purple-300">🎥 Camera:</span> {scene.camera}
         </p>
-
         <p>
-          🎙 <span className="font-bold">Voice:</span>{" "}
-          {scene.voice}
+          <span className="font-bold text-emerald-300">🎙 Voice:</span> {scene.voice}
         </p>
       </div>
 
       {error && (
-        <p className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-red-300">
+        <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
           ❌ {error}
         </p>
       )}
 
-      <div className="mt-8 flex gap-4">
+      <div className="mt-6 flex gap-3">
         <button
           type="button"
           disabled={loading}
           onClick={handleRegenerate}
-          className="rounded-xl bg-orange-500 px-6 py-3 font-bold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-xl bg-orange-500 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading
-            ? "⏳ Regenerating..."
-            : "🚀 Regenerate This Scene"}
+          {loading ? "⏳ Synthesizing New Scene Blueprint..." : "🚀 Regenerate This Scene"}
         </button>
       </div>
     </div>

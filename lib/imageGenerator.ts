@@ -1,18 +1,16 @@
-export type ImageProvider =
-  | "gemini"
-  | "openai"
-  | "claude";
+export type ImageProvider = "fal" | "gemini" | "cloudflare" | "pollinations";
 
 export type ImageResult = {
   prompt: string;
   imageUrl: string;
   status: "generated" | "failed";
   provider: string;
+  error?: string;
 };
 
 export async function generateImage(
   prompt: string,
-  provider: ImageProvider = "gemini"
+  provider: ImageProvider = "cloudflare"
 ): Promise<ImageResult> {
   const cleanPrompt = prompt.trim();
 
@@ -22,71 +20,53 @@ export async function generateImage(
       imageUrl: "",
       status: "failed",
       provider,
+      error: "Prompt cannot be empty.",
     };
   }
 
   try {
-    const response = await fetch(
-      "/api/generate-image",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: cleanPrompt,
-          provider,
-        }),
-      }
-    );
+    console.log(`🖼️ Requesting image generation with ${provider}...`);
+
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: cleanPrompt,
+        provider,
+      }),
+    });
 
     const data = await response.json();
 
-    if (
-      response.status === 429 ||
-      data.status === "quota_exceeded"
-    ) {
-      throw new Error(
-        data.message ||
-          "Image generation quota exceeded."
-      );
-    }
-
     if (!response.ok || !data.success) {
-      throw new Error(
-        data.message ||
-          "Image generation failed."
-      );
+      throw new Error(data.message || data.error || "Image generation failed.");
     }
 
-    const imageUrl =
-      data.image ||
-      data.imageUrl ||
-      "";
+    const imageUrl = data.imageUrl || data.image || "";
 
     if (!imageUrl) {
-      throw new Error(
-        "Image generation succeeded but no image was returned."
-      );
+      throw new Error("Image generation completed but no image URL was returned.");
     }
+
+    console.log(`✅ Image ready from ${data.provider || provider}.`);
 
     return {
       prompt: cleanPrompt,
       imageUrl,
       status: "generated",
-      provider:
-        data.provider || provider,
+      provider: data.provider || provider,
     };
   } catch (error) {
-    console.error(
-      "Image generation error:",
-      error
-    );
+    console.error("❌ Image generation error:", error);
 
-    throw error instanceof Error
-      ? error
-      : new Error(
-          "Image generation failed."
-        );
+    return {
+      prompt: cleanPrompt,
+      imageUrl: "",
+      status: "failed",
+      provider,
+      error: error instanceof Error ? error.message : "Image generation failed.",
+    };
   }
 }

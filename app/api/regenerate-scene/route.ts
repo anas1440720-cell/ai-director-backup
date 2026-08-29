@@ -14,9 +14,7 @@ if (!apiKey) {
   throw new Error("GEMINI_API_KEY is missing from .env.local");
 }
 
-const ai = new GoogleGenAI({
-  apiKey,
-});
+const ai = new GoogleGenAI({ apiKey });
 
 export async function POST(request: Request) {
   try {
@@ -74,7 +72,6 @@ ${scene.voice}
     });
 
     const text = response.text ?? "";
-
     let regeneratedScene: Scene;
 
     try {

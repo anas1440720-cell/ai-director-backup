@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# AI Director local/debug artifacts
+AI-DIRECTOR-AUDIT.txt
+PROJECT-SNAPSHOT.txt
+project-files.txt
+--noEmit
+tatus --short
+et --hard 948319fq
+enginesImagePromptEngine.tsx*
+*.bak
+*.backup
+*.before-*
+/public/videos/
+/test-assets-final-render/
+

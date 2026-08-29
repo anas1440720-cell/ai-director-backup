@@ -1,8 +1,17 @@
+export type CharacterDNA = {
+  characterId?: string;
+  name: string;
+  gender: string;
+  appearance: string;
+  clothing: string;
+};
+
 export type Scene = {
   title: string;
   visual: string;
   camera: string;
   voice: string;
+  characters?: CharacterDNA[];
 };
 
 export type DirectorDecision = {
@@ -13,50 +22,49 @@ export type DirectorDecision = {
   musicPrompt: string;
 };
 
+/**
+ * Builds a strict, English-only cinematic prompt guaranteeing 
+ * all characters are rendered together with correct anatomy and zero text artifacts.
+ */
 export function analyzeScene(
   scene: Scene,
   idea: string,
-  style: string,
-  audience: string,
-  goal: string
+  style: string = "Pixar 3D Animation",
+  audience: string = "General",
+  goal: string = "Cinematic storytelling"
 ): DirectorDecision {
-  // Remove previous AI regeneration text
-  // so repeated regeneration does not duplicate the content.
-  const cleanVisual = scene.visual
-    .split(". Reimagined as a ")[0]
-    .trim();
+  const cleanVisual = scene.visual.split(". Reimagined as a ")[0].trim();
+  const cleanCamera = scene.camera?.trim() || "Smooth cinematic camera tracking movement";
 
-  const cleanIdea = idea
-    .split(". Reimagined as a ")[0]
-    .trim();
+  // Build high-tier Pixar standard image prompt enforcing clean frame & both characters
+  const imagePrompt = [
+    `Masterpiece 3D cinematic frame, ${style} aesthetic`,
+    cleanVisual,
+    `cinematic soft volumetric lighting, rich color palette, extreme character consistency`,
+    `anatomically correct human bodies, exactly two hands with 5 fingers each, no extra hands, no third hand`,
+    `vertical 9:16 mobile composition, ultra clean frame, absolutely no text, no subtitles, no watermark, no captions, no gibberish letters`,
+  ].join(", ");
 
-  const baseIdea =
-    cleanIdea || cleanVisual || "the main idea";
+  // Pure motion-directive prompt for deAPI video engine (LTX)
+  const videoPrompt = [
+    `Cinematic continuous physical motion, ${cleanCamera}`,
+    `characters physically act, walk, and react naturally`,
+    `smooth 25fps framerate, movie color grading`,
+    `ultra clean background, no text, no subtitles, no on-screen letters, no extra limbs`,
+  ].join(", ");
 
   const rewrittenScene: Scene = {
     ...scene,
-
-    visual: `${cleanVisual}. Reimagined as a ${style} cinematic scene for ${audience}. Main idea: ${baseIdea}.`,
-
-    camera:
-      "Epic cinematic drone shot with dramatic lighting, smooth motion and film-quality composition.",
-
-    voice:
-      `This scene has been rewritten by the AI Director for an audience of ${audience}.`,
+    visual: cleanVisual,
+    camera: cleanCamera,
+    voice: scene.voice || "",
   };
 
   return {
     rewrittenScene,
-
-    imagePrompt:
-      `Ultra realistic ${style} movie frame of ${rewrittenScene.visual}`,
-
-    videoPrompt:
-      `Cinematic camera movement showing ${rewrittenScene.visual}`,
-
+    imagePrompt,
+    videoPrompt,
     voiceScript: rewrittenScene.voice,
-
-    musicPrompt:
-      `${style} emotional orchestral soundtrack matching the scene`,
+    musicPrompt: `Cinematic orchestral atmosphere, emotional tone reflecting ${goal}, subtle and immersive background score.`,
   };
 }

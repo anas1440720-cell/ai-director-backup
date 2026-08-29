@@ -5,167 +5,75 @@ type CameraEngineProps = {
   goal: string;
 };
 
-
-export default function CameraEngine({
-  style,
-  goal,
-}: CameraEngineProps) {
-
-
+export default function CameraEngine({ style, goal }: CameraEngineProps) {
   const getCameraPlan = () => {
-
-
     if (style === "Realistic") {
       return {
         shot: "Hollywood cinematic shots",
-        movement: "Dolly shots, tracking shots and handheld realism",
-        lens: "35mm cinematic lens",
-        angle: "Low angles for powerful moments",
-        lighting: "Natural cinematic lighting"
+        movement: "Controlled dolly, tracking shots & subtle push-ins",
+        lens: "35mm & 50mm Prime cinema lenses",
+        angle: "Eye-level & dramatic low angles",
+        lighting: "Natural volumetric cinematic lighting",
       };
     }
-
-
 
     if (style === "Pixar") {
       return {
-        shot: "Animated cinematic compositions",
-        movement: "Smooth camera movements with magical transitions",
-        lens: "Wide colorful animation lens",
-        angle: "Eye level emotional character shots",
-        lighting: "Soft bright studio lighting"
+        shot: "Animated feature composition",
+        movement: "Smooth stabilized orbital & sweeping movements",
+        lens: "Wide animation lens (24mm equivalent)",
+        angle: "Character eye-level emotive angles",
+        lighting: "Vibrant high-key studio rim lighting",
       };
     }
-
-
 
     if (style === "Anime") {
       return {
-        shot: "Dynamic anime movie shots",
-        movement: "Fast camera movements and dramatic zooms",
-        lens: "Stylized cinematic framing",
-        angle: "Extreme angles for emotions",
-        lighting: "High contrast anime lighting"
+        shot: "Dynamic Japanese animation framing",
+        movement: "Rapid cinematic tracking and impactful crash zooms",
+        lens: "Stylized anamorphic framing",
+        angle: "Extreme Dutch & dramatic three-quarter angles",
+        lighting: "High-contrast cel-shaded cinematic lighting",
       };
     }
-
-
 
     if (style === "Fantasy") {
       return {
-        shot: "Epic fantasy movie shots",
-        movement: "Large cinematic movements and aerial shots",
-        lens: "Wide epic fantasy lens",
-        angle: "Heroic low angle shots",
-        lighting: "Magical atmospheric lighting"
+        shot: "Epic scale landscape & hero shots",
+        movement: "Slow sweeping crane & majestic aerial shots",
+        lens: "Epic wide-angle cinema glass",
+        angle: "Heroic low-angle perspective",
+        lighting: "Atmospheric mystical lighting with golden hour bloom",
       };
     }
 
-
-
     return {
-      shot: "Cinematic storytelling shots",
-      movement: "Dynamic camera movements",
-      lens: "Professional movie lens",
-      angle: "Balanced cinematic angles",
-      lighting: "Balanced movie lighting"
+      shot: "Cinematic storytelling compositions",
+      movement: "Subtle dynamic camera motion",
+      lens: "Standard professional cinema lens",
+      angle: "Balanced narrative angles",
+      lighting: "Natural balanced film lighting",
     };
-
   };
-
-
 
   const camera = getCameraPlan();
 
-
-
   return (
+    <div className="mt-8 rounded-3xl border border-blue-500/30 bg-blue-500/10 p-6 backdrop-blur-xl">
+      <h3 className="text-xl font-bold text-white">📸 Cinematic Camera Engine</h3>
 
-    <div
-      className="
-      mt-8
-      rounded-3xl
-      border border-blue-500/30
-      bg-blue-500/10
-      p-6
-      "
-    >
-
-
-      <h3 className="text-xl font-bold text-white">
-        📸 Camera Engine
-      </h3>
-
-
-      <div className="mt-4 space-y-3 text-gray-300">
-
-
-        <p>
-          🎬 Shot:
-          <span className="text-white">
-            {" "}{camera.shot}
-          </span>
-        </p>
-
-
-        <p>
-          🎥 Movement:
-          <span className="text-white">
-            {" "}{camera.movement}
-          </span>
-        </p>
-
-
-        <p>
-          🔍 Lens:
-          <span className="text-white">
-            {" "}{camera.lens}
-          </span>
-        </p>
-
-
-        <p>
-          📐 Angle:
-          <span className="text-white">
-            {" "}{camera.angle}
-          </span>
-        </p>
-
-
-        <p>
-          💡 Lighting:
-          <span className="text-white">
-            {" "}{camera.lighting}
-          </span>
-        </p>
-
-
+      <div className="mt-4 grid gap-3 text-sm text-gray-300 md:grid-cols-2">
+        <p>🎬 Shot Type: <span className="font-semibold text-white">{camera.shot}</span></p>
+        <p>🎥 Camera Motion: <span className="font-semibold text-white">{camera.movement}</span></p>
+        <p>🔍 Lens Specs: <span className="font-semibold text-white">{camera.lens}</span></p>
+        <p>📐 Framing Angle: <span className="font-semibold text-white">{camera.angle}</span></p>
+        <p className="md:col-span-2">💡 Lighting Style: <span className="font-semibold text-white">{camera.lighting}</span></p>
       </div>
 
-
-
-      <div
-        className="
-        mt-5
-        rounded-xl
-        border border-white/10
-        p-4
-        "
-      >
-
-        <p className="text-gray-400">
-          🎯 Production Goal
-        </p>
-
-        <p className="mt-2 text-white">
-          {goal}
-        </p>
-
+      <div className="mt-5 rounded-xl border border-white/10 bg-black/20 p-4">
+        <p className="text-xs font-semibold text-gray-400">🎯 Production Goal Alignment</p>
+        <p className="mt-1 text-sm font-medium text-white">{goal || "Cinematic Storytelling"}</p>
       </div>
-
-
     </div>
-
   );
-
 }

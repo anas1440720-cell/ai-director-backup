@@ -1,6 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import Groq from "groq-sdk";
 
-export type AIProvider = "openai" | "gemini" | "claude";
+export type AIProvider = "groq" | "openai" | "gemini" | "claude";
 
 export type AIProviderConfig = {
   id: AIProvider;
@@ -9,21 +10,10 @@ export type AIProviderConfig = {
 };
 
 export const AI_PROVIDERS: AIProviderConfig[] = [
-  {
-    id: "gemini",
-    name: "Google Gemini",
-    available: true,
-  },
-  {
-    id: "openai",
-    name: "OpenAI",
-    available: false,
-  },
-  {
-    id: "claude",
-    name: "Anthropic Claude",
-    available: false,
-  },
+  { id: "gemini", name: "Google Gemini", available: true },
+  { id: "groq", name: "Groq Llama / GPT-OSS", available: true },
+  { id: "openai", name: "OpenAI", available: false },
+  { id: "claude", name: "Anthropic Claude", available: false },
 ];
 
 export type GenerateStoryResult = {
@@ -33,11 +23,76 @@ export type GenerateStoryResult = {
   message?: string;
 };
 
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+export type DirectorOptions = {
+  videoType: string;
+  audience: string;
+  goal: string;
+  character: string;
+  style: string;
+  voiceLanguage: "ar" | "en";
+  aspectRatio: "9:16" | "16:9";
+};
+
+/**
+ * ============================================================
+ * SCENE DURATION
+ * ============================================================
+ *
+ * deAPI LTX-Video 13B currently accepts a maximum of 4 seconds
+ * per generated clip.
+ *
+ * Therefore Story Generation must NEVER create a scene longer
+ * than 4 seconds.
+ *
+ * The total requested duration is preserved exactly.
+ *
+ * Examples:
+ * 10s -> 5s + 5s
+ * 15s -> 8s + 7s
+ * 20s -> 7s + 7s + 6s
+ */
+export function calculateSceneDurations(
+  totalDuration: number
+): number[] {
+  const safeDuration = Math.max(
+    5,
+    Math.round(Number(totalDuration) || 5)
+  );
+
+  const MAX_SCENE_DURATION = 8;
+
+  const sceneCount = Math.ceil(
+    safeDuration / MAX_SCENE_DURATION
+  );
+
+  const base = Math.floor(
+    safeDuration / sceneCount
+  );
+
+  const remainder =
+    safeDuration % sceneCount;
+
+  return Array.from(
+    { length: sceneCount },
+    (_, index) =>
+      base + (index < remainder ? 1 : 0)
+  );
+}
+
+/*
+ * ============================================================
+ * GEMINI CLIENT
+ * ============================================================
+ */
+
+function getGeminiClient(): GoogleGenAI {
+  const apiKey =
+    process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is missing from .env.local");
+    throw new Error(
+      "GEMINI_API_KEY is missing from .env.local"
+    );
   }
 
   return new GoogleGenAI({
@@ -45,592 +100,1115 @@ function getGeminiClient() {
   });
 }
 
-function getProviderConfig(provider: AIProvider) {
-  return AI_PROVIDERS.find((item) => item.id === provider);
+/*
+ * ============================================================
+ * GROQ CLIENT
+ * ============================================================
+ */
+
+function getGroqClient(): Groq {
+  const apiKey =
+    process.env.GROQ_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(
+      "GROQ_API_KEY is missing from .env.local"
+    );
+  }
+
+  return new Groq({
+    apiKey,
+  });
 }
 
-export async function generateStory(
-  provider: AIProvider,
-  idea: string
-): Promise<GenerateStoryResult> {
-  const config = getProviderConfig(provider);
+/*
+ * ============================================================
+ * STORY PROMPT
+ * ============================================================
+ */
 
-  if (!config) {
-    throw new Error(`Unknown AI Provider: ${provider}`);
-  }
+function buildStoryPrompt(
+  idea: string,
+  duration: number,
+  options: DirectorOptions
+): string {
+  const sceneDurations =
+    calculateSceneDurations(duration);
 
-  if (!config.available) {
-    return {
-      provider: config.name,
-      success: false,
-      text: "",
-      message: `${config.name} is not connected yet.`,
-    };
-  }
+  const sceneCount =
+    sceneDurations.length;
 
-  switch (provider) {
-    case "gemini":
-      return generateWithGemini(idea);
+  const outputLanguage =
+    options.voiceLanguage === "en"
+      ? "ENGLISH"
+      : "ARABIC";
 
-    case "openai":
-    case "claude":
-      return {
-        provider: config.name,
-        success: false,
-        text: "",
-        message: `${config.name} is not connected yet.`,
-      };
+  const durationPlan =
+    sceneDurations
+      .map(
+        (d, index) =>
+          `Scene ${index + 1}: ${d}s`
+      )
+      .join("\n");
 
-    default:
-      throw new Error(`Unknown AI Provider: ${provider}`);
-  }
-}
+  return `
+You are an ELITE CINEMATIC FILM DIRECTOR, SCREENWRITER, ACTING DIRECTOR, STORYBOARD DIRECTOR, AND IMAGE-TO-VIDEO MOTION SUPERVISOR.
 
-async function generateWithGemini(
-  idea: string
-): Promise<GenerateStoryResult> {
-  const ai = getGeminiClient();
+Your job is to transform the user's idea into a coherent multi-scene cinematic film.
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3.6-flash",
-    contents: `
-You are an elite AI Film Director, Screenwriter,
-Cinematographer and Visual Continuity Director.
+The final production will use:
 
-Your job is to transform the user's idea into a precise
-cinematic production blueprint that can be sent directly
-to an image generation model.
+STORY
+? IMAGE KEYFRAMES
+? IMAGE-TO-VIDEO
+? ELEVENLABS VOICE
+? SFX
+? MUSIC
+? FINAL EDIT
 
-The image model must NOT need to guess what the story means.
+The story must therefore be written specifically for cinematic visual execution.
 
-The blueprint must explicitly describe what must appear
-inside every single frame.
+==================================================
+USER IDEA
+==================================================
 
-USER IDEA:
 ${idea}
 
 ==================================================
-CORE STORY RULES
+REQUESTED PRODUCTION SETTINGS
 ==================================================
 
-1. Understand the complete story before creating scenes.
+REQUESTED TOTAL DURATION:
+${duration} seconds
 
-2. Build a logical chronological progression:
-   beginning → development → climax / ending.
+EXACT SCENE COUNT:
+${sceneCount}
 
-3. Every scene represents ONE exact moment in time.
+EXACT SCENE DURATION PLAN:
+${durationPlan}
 
-4. NEVER combine different moments, ages, locations,
-   or major events inside one image.
+Video Type:
+${options.videoType}
 
-5. NEVER show multiple ages of the same character
-   inside one image.
+Target Audience:
+${options.audience}
 
-6. NEVER use vague descriptions such as:
-   "cinematic scene about the idea"
-   "a powerful moment"
-   "something dramatic"
-   "the character faces a challenge"
+Goal:
+${options.goal}
 
-7. Every visual description must describe exactly
-   what the camera sees.
+Character Type:
+${options.character}
 
-8. Every scene must be independently understandable.
+Visual Style:
+${options.style || "Realistic"}
 
-9. Characters must remain visually consistent
-   throughout the story.
+Voice Language:
+${
+  options.voiceLanguage === "en"
+    ? "English"
+    : "Arabic"
+}
 
-10. If a character becomes older between scenes,
-    explicitly describe the new age while preserving
-    recognizable identity.
-
-11. Clothing must make sense for the character's age,
-    location, culture, occupation and time period.
-
-12. Environment must match the story.
-
-13. Do not introduce random cars, buildings,
-    weapons, people, objects or locations.
-
-14. Historical, geographical and cultural details
-    must be internally consistent.
-
-15. The image must visually communicate the actual
-    story event, not merely its mood.
+Aspect Ratio:
+${options.aspectRatio}
 
 ==================================================
-CHARACTER BIBLE
+OUTPUT LANGUAGE — ABSOLUTE
 ==================================================
 
-Before describing scenes, create a CHARACTER BIBLE.
+Every natural-language value MUST be written in ${outputLanguage}.
 
-For every important character define:
+JSON keys MUST remain in English.
 
-- characterId
-- name
-- role
-- age at first appearance
-- physical appearance
-- face structure
+Character names must be written in ${outputLanguage}.
+
+Dialogue must be written in ${outputLanguage}.
+
+Scene descriptions must be written in ${outputLanguage}.
+
+Visual descriptions must be written in ${outputLanguage}.
+
+Action descriptions must be written in ${outputLanguage}.
+
+Do NOT mix Arabic and English natural-language content.
+
+English is allowed only for JSON keys and fixed enum values such as:
+
+male
+female
+child_male
+child_female
+teenager_male
+teenager_female
+adult_male
+adult_female
+
+==================================================
+CORE CINEMATIC RULE
+==================================================
+
+EVERY SCENE MUST BE A REAL STORY EVENT.
+
+The film must feel like characters are actually living through events.
+
+NEVER create scenes that are merely:
+
+- character showcases
+- portraits
+- beauty shots
+- poses
+- character introductions without action
+- characters standing and looking at camera
+- generic walking
+- generic smiling
+- generic waving
+- decorative camera movement
+- idle animation
+
+The camera must OBSERVE AN EVENT.
+
+The character must PERFORM AN EVENT.
+
+==================================================
+MANDATORY EVENT LOGIC
+==================================================
+
+Every scene MUST contain this complete chain:
+
+CAUSE
+? ACTION
+? INTERACTION
+? REACTION
+? CONSEQUENCE
+? TRANSITION
+
+The action must be physically understandable.
+
+The viewer must be able to understand:
+
+1. What was happening.
+2. What changed.
+3. What caused the change.
+4. What the character physically did.
+5. What the character interacted with.
+6. How another character or environment reacted.
+7. What changed as a result.
+8. Why the next scene begins where it does.
+
+==================================================
+SCENE ACTING REQUIREMENTS
+==================================================
+
+Characters should perform meaningful actions such as:
+
+- walking with purpose
+- running when appropriate
+- stopping
+- turning
+- crouching
+- leaning
+- reaching
+- grabbing
+- releasing
+- opening
+- closing
+- pushing
+- pulling
+- picking up
+- dropping
+- pointing
+- stepping back
+- stepping forward
+- approaching
+- retreating
+- looking toward an object
+- looking toward another character
+- exchanging meaningful glances
+- reacting to unexpected events
+- manipulating objects
+- interacting with walls
+- interacting with doors
+- interacting with streets
+- interacting with furniture
+- interacting with magical objects
+- responding to environmental changes
+
+Every movement MUST have a narrative reason.
+
+==================================================
+PHYSICAL ACTING
+==================================================
+
+Describe actions as physical performances.
+
+Bad:
+
+"Character is surprised."
+
+Good:
+
+"Character notices the glowing object, freezes for a brief moment, widens their eyes, leans backward, takes one cautious step away, then looks toward the other child."
+
+Emotion must be visible through:
+
+- facial expression
+- eye direction
+- head movement
+- body posture
+- weight shift
+- hand movement
+- movement through space
+- reaction timing
+
+==================================================
+ANTI-CHARACTER-SHOWCASE RULE
+==================================================
+
+STRICTLY FORBIDDEN:
+
+- stationary character posing
+- character looking at camera
+- character smiling at camera
+- beauty shots
+- portrait animation
+- character presentation shots
+- slow generic walking
+- walking toward camera without story purpose
+- waving without narrative reason
+- random hand gestures
+- random head movement
+- generic idle movement
+- characters staring at each other without interaction
+- camera orbit around stationary characters
+- cinematic camera movement without story action
+- animation that does not change the story
+
+If a scene can be described as "the character looks cool", it is WRONG.
+
+==================================================
+CHARACTER COUNT
+==================================================
+
+Use 1 or 2 main characters.
+
+Do not unnecessarily create many characters.
+
+If the story can work with two children, use two children.
+
+If one character is sufficient, use one.
+
+==================================================
+CHARACTER CONTINUITY — ABSOLUTE
+==================================================
+
+Create immutable Visual DNA for every main character.
+
+For every main character define:
+
+- exact age
+- gender
 - skin tone
-- hair
-- eyes
-- body type
-- distinctive identifying features
+- face shape
+- hairstyle
+- hair color
+- eye color
+- body proportions
 - clothing
-- footwear
+- clothing colors
+- shoes
 - accessories
-- personality
-- visual identity
+- distinctive visual traits
 
-The characterId must remain identical across scenes.
+These properties are IMMUTABLE.
 
-If the character ages, preserve the same identity
-while changing only age-appropriate characteristics.
+They MUST NOT change between scenes.
 
-Do NOT create contradictory appearances.
+Never change:
 
-==================================================
-SCENE BLUEPRINT
-==================================================
-
-Create exactly 3 major scenes.
-
-Each scene must contain:
-
-title
-
-storyPurpose:
-Explain exactly why this scene exists in the story.
-
-time:
-Specify the time period, season, time of day,
-and approximate chronological position if useful.
-
-location:
-Specify the exact physical location.
-
-characters:
-List only the characters visible in this scene.
-
-For every visible character specify:
-
-- characterId
-- name
-- age
-- appearance
+- face
+- facial structure
+- age appearance
+- gender
+- hairstyle
+- hair color
+- eye color
+- skin tone
+- body proportions
 - clothing
-- action
-- emotion
-- positionInFrame
-
-action:
-Describe exactly what is physically happening
-at this instant.
-
-emotion:
-Describe the emotional state visible on faces
-and body language.
-
-environment:
-Describe the complete environment.
-
-environment must contain:
-
-- description
-- foreground
-- background
-- props
-
-lighting:
-Describe:
-
-- source
-- direction
-- quality
-- mood
-
-composition:
-Describe:
-
-- shotType
-- cameraAngle
-- lens
-- depthOfField
-- framing
-
-visual:
-Write a highly detailed description of exactly
-what the image generation model must render.
-
-camera:
-Describe the camera perspective for this exact frame.
-
-continuity:
-Explicitly describe which character details must
-remain consistent with previous scenes.
-
-voice:
-Write a short narration corresponding ONLY
-to this exact moment.
+- clothing colors
+- shoes
+- accessories
+- distinctive traits
 
 ==================================================
-CAMERA RULES
+SCENE CHARACTER CONTINUITY
 ==================================================
 
-Choose camera language appropriate to the scene.
+Every scene MUST contain a "characters" array.
 
-Possible shot types include:
+Each scene character entry MUST repeat:
 
-- extreme wide shot
-- wide shot
-- full shot
-- medium shot
-- medium close-up
-- close-up
-- extreme close-up
+- character identity
+- exact appearance
+- current action
+- current emotion
+- current position in frame
 
-Possible camera angles include:
+The scene character data is used directly by the video prompt system.
 
-- eye level
-- low angle
-- high angle
+Do NOT omit it.
+
+==================================================
+ENVIRONMENT CONTINUITY
+==================================================
+
+Every scene MUST contain:
+
+"location"
+
+and
+
+"environment": {
+  "description": "...",
+  "objects": "...",
+  "lighting": "...",
+  "timeOfDay": "..."
+}
+
+The environment must remain logically consistent between scenes unless the story explicitly changes location.
+
+Characters must physically exist inside the environment.
+
+They must not look pasted onto the background.
+
+==================================================
+ENVIRONMENT INTERACTION
+==================================================
+
+When appropriate, characters should:
+
+- touch walls
+- open doors
+- step around objects
+- pick up objects
+- push objects
+- pull objects
+- touch surfaces
+- move around obstacles
+- interact with weather
+- react to light
+- interact with magical elements
+- affect objects
+- cause environmental changes
+
+The environment must participate in the story.
+
+==================================================
+IMAGE KEYFRAME
+==================================================
+
+The "visual" field is the source image keyframe.
+
+It is NOT a character portrait.
+
+It MUST show a meaningful story moment.
+
+The visual description MUST include:
+
+- exact character identity
+- exact clothing
+- current action
+- current pose
+- current interaction
+- environment
+- important objects
+- emotional state
+- spatial relationship
+- cinematic composition
+- lighting
+- selected visual style
+- ${options.aspectRatio} composition
+- no text
+- no subtitles
+- no watermark
+- natural anatomy
+- natural hands
+- natural body posture
+
+The source image will later become the first frame of image-to-video generation.
+
+Therefore the image must visually represent the event.
+
+==================================================
+VIDEO MOTION COMPATIBILITY
+==================================================
+
+Every scene must be executable as a short image-to-video shot.
+
+Avoid actions that require too many unrelated events.
+
+A single scene should contain ONE coherent event with several connected acting beats.
+
+For example:
+
+Child walks toward glowing object
+? notices it floating
+? slows down
+? reaches toward it
+? object reacts
+? child pulls hand back
+? second child approaches
+? both stare at the changed object.
+
+This is GOOD.
+
+Do NOT compress unrelated events into one scene.
+
+==================================================
+SCENE BEATS
+==================================================
+
+For every scene internally construct:
+
+BEAT 1 — INITIAL STATE
+
+What is physically happening at the beginning?
+
+BEAT 2 — TRIGGER
+
+What changes the situation?
+
+BEAT 3 — ACTION
+
+What does the character physically do?
+
+BEAT 4 — INTERACTION
+
+What object, character, or environment is touched or affected?
+
+BEAT 5 — REACTION
+
+How does the character or environment physically react?
+
+BEAT 6 — CONSEQUENCE
+
+What changes because of the action?
+
+BEAT 7 — TRANSITION
+
+What final visual state naturally leads into the next scene?
+
+The final "action" field MUST combine all seven beats into one concise chronological physical performance.
+
+==================================================
+CAMERA
+==================================================
+
+The camera must observe the event.
+
+Camera movement is SECONDARY to acting.
+
+Use:
+
+- tracking
+- lateral tracking
+- dolly
+- push-in
+- pull-back
 - over-the-shoulder
-- profile
-- three-quarter view
+- reaction close-up
+- environmental reveal
+- low angle
+- crane
+- controlled handheld follow
 
-Do not randomly use camera movements.
+Only use camera movement when it helps communicate the event.
 
-For an IMAGE, describe the camera position and framing,
-not an imaginary video movement.
-
-==================================================
-VISUAL ACCURACY RULES
-==================================================
-
-The visual description must answer:
-
-WHO is visible?
-
-WHAT are they doing?
-
-WHERE are they?
-
-WHEN is this happening?
-
-WHAT are they wearing?
-
-WHAT do they look like?
-
-WHAT objects are visible?
-
-WHAT is in the foreground?
-
-WHAT is in the background?
-
-WHAT is the lighting?
-
-WHAT is the camera angle?
-
-WHAT emotion is visible?
-
-WHAT must remain consistent with previous scenes?
+Never use camera movement to hide weak acting.
 
 ==================================================
-EXAMPLE
+VOICE
 ==================================================
 
-If the idea is about a poor Egyptian child who grows up
-and discovers an ancient Egyptian treasure:
+Dialogue is optional.
 
-Scene 1 must show ONLY the beginning.
+Do NOT create dialogue just to fill silence.
 
-Example concept:
+If dialogue is unnecessary:
 
-A newborn child inside a poor rural Egyptian home.
-The mother is holding the newborn while the father
-stands beside her. The room is small and poor,
-with mud-brick walls and very limited furniture.
-The parents wear simple rural Egyptian clothing.
-The scene communicates poverty, family and hope.
+"dialogue": []
 
-Do NOT show the adult version of the child.
+If dialogue exists, it MUST:
 
-Scene 2 must show ONLY the next major event.
+- belong to the correct character
+- match the character's age
+- match the emotional state
+- be relevant to the event
+- fit the scene duration
+- be natural
+- be written entirely in ${outputLanguage}
 
-The same character is now a young adult working
-in an agricultural field. His facial identity,
-hair characteristics and recognizable features
-must remain consistent with the character bible.
-He wears practical rural farming clothes.
-The Egyptian agricultural environment is clearly visible.
-
-Do NOT show the newborn.
-
-Scene 3 must show ONLY the discovery.
-
-The same young adult stands inside a newly discovered
-ancient underground chamber beneath the agricultural land.
-He has just uncovered an entrance to an ancient Egyptian
-treasure chamber. Ancient Egyptian statues, stone walls,
-hieroglyphics, treasure chests and gold objects are visible.
-His face shows genuine shock and amazement.
-
-Do NOT show previous scenes or younger versions.
+Do NOT write narration unless the story genuinely requires narration.
 
 ==================================================
-ANTI-GENERIC RULE
+AUDIO ARCHITECTURE
 ==================================================
 
-Never write:
+The image-to-video provider MUST remain visual-only.
 
-"cinematic scene about..."
+The generated video must NOT contain:
 
-"opening cinematic scene..."
+- speech
+- dialogue
+- narration
+- music
+- singing
+- lyrics
+- sound effects
 
-"the character faces a challenge..."
+Dialogue belongs to the external ElevenLabs voice pipeline.
 
-"powerful cinematic ending..."
+SFX belongs to the SFX pipeline.
 
-"beautiful cinematic environment..."
+Music belongs to the music pipeline.
 
-unless followed by precise physical details.
+Therefore:
 
-Every sentence must provide information useful
-to an image generation model.
+"dialogue" describes only intended dialogue.
+
+"sfxPrompt" describes only sounds caused by visible actions.
+
+"musicMood" describes only emotional background music.
+
+Do NOT put spoken dialogue inside:
+
+- musicMood
+- sfxPrompt
+- action
+- visual
 
 ==================================================
-OUTPUT FORMAT
+SFX
+==================================================
+
+"sfxPrompt" must describe only sounds caused by visible physical actions.
+
+Examples:
+
+- footsteps on pavement
+- child touching metal
+- object falling
+- wooden door opening
+- fabric movement
+- wind moving through alley
+- magical energy pulsing
+- footsteps approaching
+- glass breaking
+
+Do not create generic SFX unrelated to visible action.
+
+==================================================
+MUSIC
+==================================================
+
+"musicMood" describes ONLY background emotional music.
+
+Examples:
+
+- mysterious magical tension
+- warm childhood wonder
+- urgent adventure
+- quiet suspense
+- emotional discovery
+
+Do NOT put dialogue or narration inside musicMood.
+
+==================================================
+CONTINUITY
+==================================================
+
+Every scene must logically continue from the previous scene.
+
+Scene N ending MUST create the physical starting condition of Scene N+1.
+
+Do not reset:
+
+- character positions
+- clothing
+- props
+- environment
+- lighting
+- time of day
+
+unless the story explicitly causes the change.
+
+==================================================
+STYLE — ABSOLUTE
+==================================================
+
+The selected style is FINAL.
+
+Selected Visual Style:
+
+${options.style || "Realistic"}
+
+Every visual description MUST respect the selected style.
+
+Do NOT:
+
+- reinterpret the style
+- weaken the style
+- mix styles
+- switch rendering medium
+- turn realistic into animation
+- turn animation into photorealism
+- add unrelated visual aesthetics
+
+The visual style must remain consistent across every scene.
+
+==================================================
+LANGUAGE
+==================================================
+
+All natural-language content must be:
+
+${outputLanguage}
+
+Do not write English descriptions when Arabic is requested.
+
+Do not write Arabic descriptions when English is requested.
+
+==================================================
+SCENE DURATION
+==================================================
+
+Respect this EXACT schedule:
+
+${durationPlan}
+
+Do not change scene durations.
+
+Do not create additional scenes.
+
+Do not remove scenes.
+
+Do not merge scenes.
+
+Each scene duration MUST exactly match the schedule.
+
+Each scene duration MUST be between 1 and 4 seconds.
+
+==================================================
+OUTPUT JSON
 ==================================================
 
 Return ONLY valid JSON.
 
-Do not use markdown.
+No markdown.
 
-Do not use code fences.
+No code fences.
 
-Do not add explanations before or after the JSON.
+No commentary.
 
-Use exactly this structure:
+No explanations.
+
+No extra keys outside the schema.
+
+Schema:
 
 {
-  "hook": "short cinematic hook",
+  "hook": "Cinematic hook sentence",
 
   "characters": [
     {
-      "characterId": "character_1",
-      "name": "Character name",
-      "role": "Role in story",
-      "age": "Age",
-      "appearance": "Detailed physical appearance",
-      "faceStructure": "Detailed face structure",
-      "skinTone": "Skin tone",
-      "hair": "Hair description",
-      "eyes": "Eye description",
-      "bodyType": "Body type",
-      "distinctiveFeatures": "Unique identifying features",
-      "clothing": "Detailed clothing",
-      "footwear": "Footwear",
-      "accessories": "Accessories",
-      "personality": "Personality",
-      "visualIdentity": "Short continuity identity description"
+      "characterId": "char_1",
+      "name": "Character Name",
+      "gender": "male / female",
+      "voiceType": "child_male / child_female / teenager_male / teenager_female / adult_male / adult_female",
+      "age": "Exact age",
+      "appearance": "Full immutable visual DNA",
+      "clothing": "Exact immutable outfit",
+      "visualIdentity": "Signature immutable traits"
     }
   ],
 
   "scenes": [
     {
       "title": "Scene 1",
-      "storyPurpose": "Exact narrative purpose",
-      "time": "Exact time / period",
-      "location": "Exact location",
+
+      "duration": ${sceneDurations[0]},
+
+      "storyPurpose": "Specific narrative purpose of this event",
+
+      "sceneObjective": "What the character wants to accomplish in this scene",
+
+      "action": "Chronological physical acting sequence containing initial state, trigger, action, interaction, reaction, consequence and transition",
+
+      "interaction": "Specific physical interaction between character, object, environment or another character",
+
+      "reaction": "Specific visible physical and emotional reaction caused by the event",
+
+      "movement": "Specific purposeful movement through physical space",
+
+      "emotion": "Emotional progression expressed through facial expression and body language",
+
+      "environmentInteraction": "How the characters physically interact with the environment",
+
+      "continuity": "How this scene connects from the previous scene and leads into the next scene",
+
+      "location": "Specific physical location",
+
+      "environment": {
+        "description": "Detailed physical environment",
+        "objects": "Important physical objects and props",
+        "lighting": "Lighting conditions",
+        "timeOfDay": "Time of day"
+      },
 
       "characters": [
         {
-          "characterId": "character_1",
-          "name": "Character name",
-          "age": "Age in this scene",
-          "appearance": "Scene-specific appearance",
-          "clothing": "Scene-specific clothing",
-          "action": "Exact physical action",
-          "emotion": "Visible emotion",
-          "positionInFrame": "Exact position in frame"
+          "characterId": "char_1",
+          "name": "Character Name",
+          "appearance": "Exact immutable appearance repeated from character DNA",
+          "clothing": "Exact immutable clothing repeated from character DNA",
+          "action": "Exact physical action performed in this scene",
+          "emotion": "Current emotional state expressed physically",
+          "positionInFrame": "Specific physical position in the environment and frame"
         }
       ],
 
-      "action": "Exact physical event happening at this moment",
+      "sfxPrompt": "Sounds caused only by visible physical actions",
 
-      "emotion": "Main emotional state",
+      "musicMood": "Background cinematic music mood only",
 
-      "environment": {
-        "description": "Detailed environment",
-        "foreground": "Foreground details",
-        "background": "Background details",
-        "props": [
-          "Important prop 1",
-          "Important prop 2"
-        ]
-      },
+      "visual": "Cinematic source image keyframe showing the exact immutable character DNA performing the actual story event, interacting with the environment and props, with the correct emotional state and physical pose, ${options.aspectRatio} composition, selected visual style, no text, no subtitles, no watermark",
 
-      "lighting": {
-        "source": "Lighting source",
-        "direction": "Lighting direction",
-        "quality": "Lighting quality",
-        "mood": "Lighting mood"
-      },
+      "camera": "Cinematic camera movement that clearly observes and supports the physical event",
 
-      "composition": {
-        "shotType": "Shot type",
-        "cameraAngle": "Camera angle",
-        "lens": "Lens choice",
-        "depthOfField": "Depth of field",
-        "framing": "Framing description"
-      },
-
-      "visual": "Extremely detailed description of exactly what the camera sees",
-
-      "camera": "Exact camera perspective and framing",
-
-      "continuity": "Character and visual continuity requirements",
-
-      "voice": "Narration for this exact moment"
-    },
-
-    {
-      "title": "Scene 2",
-      "storyPurpose": "Exact narrative purpose",
-      "time": "Exact time / period",
-      "location": "Exact location",
-
-      "characters": [
+      "dialogue": [
         {
-          "characterId": "character_1",
-          "name": "Character name",
-          "age": "Age in this scene",
-          "appearance": "Scene-specific appearance",
-          "clothing": "Scene-specific clothing",
-          "action": "Exact physical action",
-          "emotion": "Visible emotion",
-          "positionInFrame": "Exact position in frame"
+          "speakerName": "Character Name",
+          "characterType": "child_male / child_female / teenager_male / teenager_female / adult_male / adult_female",
+          "line": "Natural spoken line in ${outputLanguage}"
         }
-      ],
-
-      "action": "Exact physical event happening at this moment",
-
-      "emotion": "Main emotional state",
-
-      "environment": {
-        "description": "Detailed environment",
-        "foreground": "Foreground details",
-        "background": "Background details",
-        "props": [
-          "Important prop 1",
-          "Important prop 2"
-        ]
-      },
-
-      "lighting": {
-        "source": "Lighting source",
-        "direction": "Lighting direction",
-        "quality": "Lighting quality",
-        "mood": "Lighting mood"
-      },
-
-      "composition": {
-        "shotType": "Shot type",
-        "cameraAngle": "Camera angle",
-        "lens": "Lens choice",
-        "depthOfField": "Depth of field",
-        "framing": "Framing description"
-      },
-
-      "visual": "Extremely detailed description of exactly what the camera sees",
-
-      "camera": "Exact camera perspective and framing",
-
-      "continuity": "Character and visual continuity requirements",
-
-      "voice": "Narration for this exact moment"
-    },
-
-    {
-      "title": "Scene 3",
-      "storyPurpose": "Exact narrative purpose",
-      "time": "Exact time / period",
-      "location": "Exact location",
-
-      "characters": [
-        {
-          "characterId": "character_1",
-          "name": "Character name",
-          "age": "Age in this scene",
-          "appearance": "Scene-specific appearance",
-          "clothing": "Scene-specific clothing",
-          "action": "Exact physical action",
-          "emotion": "Visible emotion",
-          "positionInFrame": "Exact position in frame"
-        }
-      ],
-
-      "action": "Exact physical event happening at this moment",
-
-      "emotion": "Main emotional state",
-
-      "environment": {
-        "description": "Detailed environment",
-        "foreground": "Foreground details",
-        "background": "Background details",
-        "props": [
-          "Important prop 1",
-          "Important prop 2"
-        ]
-      },
-
-      "lighting": {
-        "source": "Lighting source",
-        "direction": "Lighting direction",
-        "quality": "Lighting quality",
-        "mood": "Lighting mood"
-      },
-
-      "composition": {
-        "shotType": "Shot type",
-        "cameraAngle": "Camera angle",
-        "lens": "Lens choice",
-        "depthOfField": "Depth of field",
-        "framing": "Framing description"
-      },
-
-      "visual": "Extremely detailed description of exactly what the camera sees",
-
-      "camera": "Exact camera perspective and framing",
-
-      "continuity": "Character and visual continuity requirements",
-
-      "voice": "Narration for this exact moment"
+      ]
     }
   ]
 }
 
-FINAL CHECK BEFORE RETURNING JSON:
+==================================================
+FINAL QUALITY CHECK BEFORE RETURNING JSON
+==================================================
 
-- Exactly 3 scenes.
-- Character identities are consistent.
-- Each scene contains one moment.
-- No mixed ages in one image.
-- No random unrelated objects.
-- Every scene advances the story.
-- Every visual description is concrete and physically visible.
-- Every camera description matches the scene.
-- Every environment matches the location.
-- Every clothing description matches the character and period.
-- Scene 2 must logically follow Scene 1.
-- Scene 3 must logically follow Scene 2.
-`,
-  });
+Before returning the JSON, internally verify:
+
+1. Exact requested total duration is preserved.
+2. Scene count exactly equals ${sceneCount}.
+3. Every scene duration matches the schedule.
+4. No scene exceeds 4 seconds.
+5. Every scene contains a real event.
+6. Every scene has cause ? action ? interaction ? reaction ? consequence.
+7. Every scene contains purposeful movement.
+8. Every scene contains scene.characters.
+9. Every scene contains location.
+10. Every scene contains environment.
+11. Character DNA is identical across scenes.
+12. Clothing never changes.
+13. Faces never change.
+14. Hair never changes.
+15. Eye color never changes.
+16. Body proportions never change.
+17. Visual style never changes.
+18. Scene N leads naturally into Scene N+1.
+19. Visual keyframes show events, not portraits.
+20. Dialogue is relevant and optional.
+21. SFX describe visible actions only.
+22. MusicMood contains no dialogue.
+23. No audio is requested from the image-to-video provider.
+24. No text, subtitles or watermark are requested.
+25. All natural-language content uses ${outputLanguage}.
+
+Return the final JSON only.
+`.trim();
+}
+
+/*
+ * ============================================================
+ * GROQ STORY GENERATION
+ * ============================================================
+ */
+
+async function generateWithGroq(
+  idea: string,
+  duration: number,
+  options: DirectorOptions
+): Promise<GenerateStoryResult> {
+  const prompt =
+    buildStoryPrompt(
+      idea,
+      duration,
+      options
+    );
+
+  try {
+    const groq =
+      getGroqClient();
+
+    const completion =
+      await groq.chat.completions.create({
+        model:
+          "llama-3.3-70b-versatile",
+
+        temperature: 0.7,
+
+        response_format: {
+          type: "json_object",
+        },
+
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      });
+
+    const text =
+      completion
+        .choices?.[0]
+        ?.message
+        ?.content ?? "";
+
+    if (!text.trim()) {
+      throw new Error(
+        "Groq returned empty text."
+      );
+    }
+
+    return {
+      provider: "Groq",
+      success: true,
+      text,
+    };
+  } catch (error) {
+    console.error(
+      "Groq generation failed:",
+      error
+    );
+
+    return {
+      provider: "Groq",
+      success: false,
+      text: "",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Groq failed",
+    };
+  }
+}
+
+/*
+ * ============================================================
+ * GEMINI STORY GENERATION
+ * ============================================================
+ */
+
+async function generateWithGemini(
+  idea: string,
+  duration: number,
+  options: DirectorOptions
+): Promise<GenerateStoryResult> {
+  /*
+   * Updated official Google Gemini model names.
+   */
+
+  const fallbackModels = [
+    "gemini-3.5-flash", "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+  ];
+
+  const prompt =
+    buildStoryPrompt(
+      idea,
+      duration,
+      options
+    );
+
+  let lastError: unknown = null;
+
+  const gemini =
+    getGeminiClient();
+
+  // Safety settings to prevent empty responses on mystery/thriller stories
+  const safetySettings = [
+    {
+      category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+      threshold: HarmBlockThreshold.BLOCK_NONE,
+    },
+  ];
+
+  for (const modelName of fallbackModels) {
+    try {
+      console.log(
+        `?? Gemini story generation using model: ${modelName}`
+      );
+
+      const response =
+        await gemini.models.generateContent({
+          model: modelName,
+
+          contents: prompt,
+
+          config: {
+            responseMimeType:
+              "application/json",
+
+            temperature: 0.7,
+            safetySettings: safetySettings as any,
+          },
+        });
+
+      let text = "";
+
+      if (
+        typeof (response as any)?.text ===
+        "function"
+      ) {
+        text =
+          (response as any).text();
+      } else if (
+        typeof (response as any)?.text ===
+        "string"
+      ) {
+        text =
+          (response as any).text;
+      } else if (
+        (
+          response as any
+        )?.candidates?.[0]
+          ?.content?.parts?.[0]
+          ?.text
+      ) {
+        text =
+          (
+            response as any
+          ).candidates[0]
+            .content.parts[0].text;
+      }
+
+      if (
+        typeof text === "string" &&
+        text.trim()
+      ) {
+        console.log(
+          `? Gemini story generation succeeded with ${modelName}`
+        );
+
+        return {
+          provider:
+            `Gemini (${modelName})`,
+          success: true,
+          text,
+        };
+      }
+
+      throw new Error(
+        `Gemini ${modelName} returned empty text.`
+      );
+    } catch (error) {
+      lastError = error;
+
+      console.warn(
+        `?? Gemini model ${modelName} failed:`,
+        error instanceof Error
+          ? error.message
+          : error
+      );
+    }
+  }
+
+  /*
+   * ==========================================================
+   * GROQ FALLBACK
+   * ==========================================================
+   *
+   * Only use Groq when Gemini completely fails and
+   * GROQ_API_KEY exists.
+   */
+
+  if (
+    process.env.GROQ_API_KEY
+  ) {
+    console.warn(
+      "?? Gemini failed on all configured models. Falling back to Groq."
+    );
+
+    return generateWithGroq(
+      idea,
+      duration,
+      options
+    );
+  }
+
+  console.error(
+    "? Gemini generation failed completely:",
+    lastError
+  );
 
   return {
     provider: "Gemini",
-    success: true,
-    text: response.text ?? "",
+    success: false,
+    text: "",
+    message:
+      lastError instanceof Error
+        ? lastError.message
+        : "Gemini story generation failed",
   };
+}
+
+/*
+ * ============================================================
+ * PUBLIC STORY GENERATOR
+ * ============================================================
+ */
+
+export async function generateStory(
+  provider: AIProvider,
+  idea: string,
+  duration: number,
+  options: DirectorOptions
+): Promise<GenerateStoryResult> {
+  if (
+    provider === "groq"
+  ) {
+    return generateWithGroq(
+      idea,
+      duration,
+      options
+    );
+  }
+
+  /*
+   * OpenAI and Claude are not enabled yet.
+   * Gemini remains the default provider.
+   */
+
+  return generateWithGemini(
+    idea,
+    duration,
+    options
+  );
 }

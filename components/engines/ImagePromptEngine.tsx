@@ -1,4 +1,7 @@
-"use client";
+﻿"use client";
+
+export { getStyleProfile, normalizeVisualStyle } from "./StyleProfile.tmp";
+export type { VisualStyle } from "./StyleProfile.tmp";
 
 export type ImagePromptCharacter = {
   characterId?: string;
@@ -51,6 +54,23 @@ export type ImagePromptScene = {
   voice: string;
 };
 
+
+export type CharacterLock = {
+  characterId?: string;
+  name?: string;
+  age?: string;
+  appearance?: string;
+  faceStructure?: string;
+  skinTone?: string;
+  hair?: string;
+  eyes?: string;
+  bodyType?: string;
+  clothing?: string;
+  footwear?: string;
+  accessories?: string;
+  distinctiveFeatures?: string;
+  visualIdentity?: string;
+};
 type ImagePromptEngineProps = {
   scenes: ImagePromptScene[];
 };
@@ -60,8 +80,42 @@ type ImagePromptEngineProps = {
  * image generation prompt.
  */
 export function buildImagePrompt(
-  scene: ImagePromptScene
+  scene: ImagePromptScene,
+  style: string = "Realistic",
+  locks: CharacterLock[] = []
 ): string {
+  const styleText = style?.trim() || "Realistic";
+
+  const characterLocks =
+    locks.length > 0
+      ? locks
+          .map(
+            (lock) => `
+LOCKED CHARACTER IDENTITY:
+Character ID: ${lock.characterId || "character_1"}
+Name: ${lock.name || "Unnamed character"}
+Age: ${lock.age || "Not specified"}
+Appearance: ${lock.appearance || "Preserve established appearance."}
+Face Structure: ${lock.faceStructure || "Preserve established face structure."}
+Skin Tone: ${lock.skinTone || "Preserve established skin tone."}
+Hair: ${lock.hair || "Preserve established hair."}
+Eyes: ${lock.eyes || "Preserve established eyes."}
+Body Type: ${lock.bodyType || "Preserve established body type."}
+Clothing: ${lock.clothing || "Preserve established clothing."}
+Footwear: ${lock.footwear || "Preserve established footwear."}
+Accessories: ${lock.accessories || "Preserve established accessories."}
+Distinctive Features: ${
+              lock.distinctiveFeatures ||
+              "Preserve all established distinctive features."
+            }
+Visual Identity: ${
+              lock.visualIdentity ||
+              "Preserve the exact established visual identity."
+            }`
+          )
+          .join("\n")
+      : "No global character locks available.";
+
   const characters =
     scene.characters
       ?.map(
@@ -90,9 +144,20 @@ Position in frame: ${
   return `
 CINEMATIC IMAGE GENERATION PROMPT
 
+================================
+SELECTED VISUAL STYLE
+================================
+
+${styleText}
+
+The selected visual style is mandatory.
+Apply this exact visual style consistently to the entire image.
+Do not substitute another visual medium.
+Do not mix visual styles.
+
 Create ONE single cinematic image representing ONE exact physical moment from the story.
 
-The image must look like a real frame captured from the exact scene described below.
+The image must look like a real frame captured during the action of the exact scene described below.
 
 ================================
 SCENE IDENTITY
@@ -117,14 +182,158 @@ CHARACTERS
 ${characters}
 
 ================================
-EXACT STORY ACTION
+GLOBAL CHARACTER LOCKS
 ================================
 
-Action:
+${characterLocks}
+
+These character locks are AUTHORITATIVE.
+
+Preserve the exact identity of every recurring character across ALL scenes.
+
+Do not change:
+- face structure
+- skin tone
+- hair
+- eyes
+- body type
+- age
+- clothing
+- footwear
+- accessories
+- distinctive features
+- established visual identity
+
+The current scene may change pose, movement, action, emotion and camera framing,
+but the character identity itself MUST remain consistent.
+
+================================
+EXACT STORY EVENT
+================================
+
+Primary Action:
 ${scene.action || scene.visual}
 
-Emotion:
+Scene Emotion:
 ${scene.emotion || "Emotion must match the exact event."}
+
+The image MUST visually communicate the specific story event above.
+
+Do not replace the event with a generic pose.
+
+Do not merely display the characters.
+
+The characters must be actively DOING something that causes or expresses the story event.
+
+================================
+CINEMATIC ACTING & INTERACTION
+================================
+
+The characters are ACTORS inside a real physical event, not models posing for a portrait.
+
+Prioritize observable physical acting over character presentation.
+
+If multiple characters are present, they must have a believable spatial and behavioral relationship to one another.
+
+Show natural interaction between characters whenever the story requires it:
+- looking at each other when appropriate
+- reacting to each other's actions
+- speaking to or listening to one another when appropriate
+- reaching toward, holding, helping, following, avoiding or confronting one another when justified
+- natural body orientation toward the relevant person or object
+- believable interpersonal distance
+- coordinated physical actions
+- visible cause-and-effect between one character's action and another character's reaction
+
+If a character interacts with an object, the interaction must be physically clear:
+- hands must correctly contact or manipulate the object
+- body position must support the action
+- gaze should naturally follow the action or object
+- the object must occupy the correct physical location
+- the character's movement must make sense within the environment
+
+Every major character should have a meaningful role in the exact event.
+
+Do not make all characters stand independently and face the camera.
+
+Do not make characters pose side-by-side merely to show their appearance.
+
+Do not make characters look directly into the camera unless the story explicitly requires it.
+
+Use natural acting poses, body language, gestures, gaze direction and reactions.
+
+The strongest visual information in the frame must come from the STORY EVENT and the characters' interaction with it.
+
+================================
+ACTION CAUSE AND REACTION
+================================
+
+The scene should contain a clear visual cause-and-effect relationship.
+
+Show:
+1. What is physically happening.
+2. Who is causing or performing the action.
+3. Who or what is being affected.
+4. The immediate physical or emotional reaction.
+
+Prefer active verbs and visible physical behavior.
+
+Examples of acceptable cinematic behavior:
+- one character reaches toward something while another reacts
+- one character discovers an object while another leans closer to inspect it
+- one character runs while another turns and reacts
+- one character opens a door while another waits or looks inside
+- one character points toward something while another follows the pointing direction with their gaze
+- characters physically cooperate to solve a problem
+- a character's movement changes another character's position, attention or emotion
+
+Avoid static descriptions such as:
+"two characters standing together"
+"characters looking at the camera"
+"characters posing"
+"character portrait"
+"character showcase"
+
+Unless explicitly required by the story, the scene must NOT look like a posed group photograph.
+
+================================
+BODY LANGUAGE & GAZE
+================================
+
+Use anatomically believable body language.
+
+Hands, arms, shoulders, torso, legs and head direction must support the described action.
+
+Gaze direction must support the event:
+- characters look toward the object they are interacting with
+- characters look toward the person they are responding to
+- characters look toward the source of danger, discovery or movement
+- characters may look away from the camera when the event requires it
+
+Facial expressions must be reactions to the event, not generic emotional portraits.
+
+Body posture must communicate:
+attention, surprise, fear, curiosity, urgency, cooperation, hesitation, excitement or other emotions only when justified by the scene.
+
+================================
+SPATIAL BLOCKING
+================================
+
+Maintain clear cinematic blocking.
+
+Every important character must occupy a deliberate physical position within the environment.
+
+Their positions must make the action readable.
+
+Foreground, middle ground and background characters must have meaningful spatial relationships.
+
+Do not randomly arrange characters.
+
+Do not overlap bodies unnaturally.
+
+Do not place hands, faces or important objects in physically impossible positions.
+
+The environment must provide believable physical space for the described action.
 
 ================================
 ENVIRONMENT
@@ -151,6 +360,12 @@ ${
 Important Props:
 ${props}
 
+The environment is part of the scene action.
+
+Use environmental objects and spatial features when they naturally participate in the event.
+
+Do not add unrelated scenery merely for cinematic decoration.
+
 ================================
 LIGHTING
 ================================
@@ -175,6 +390,8 @@ ${
   scene.lighting?.mood ||
   "Emotionally appropriate to the exact scene."
 }
+
+Lighting must support the action and environment without overpowering the story event.
 
 ================================
 CAMERA & COMPOSITION
@@ -201,11 +418,19 @@ ${
 Framing:
 ${
   scene.composition?.framing ||
-  "Clear subject-focused cinematic framing."
+  "Clear subject-focused cinematic framing that preserves the complete physical action."
 }
 
 Camera Direction:
 ${scene.camera}
+
+The camera must serve the story event.
+
+Prefer compositions that make the interaction and physical action immediately readable.
+
+Do not frame the image primarily as a character portrait.
+
+Do not sacrifice the physical action merely to create a beautiful portrait.
 
 ================================
 VISUAL DESCRIPTION
@@ -270,11 +495,31 @@ STRICT DIRECTOR RULES
 
 22. Prioritize STORY ACCURACY over generic cinematic decoration.
 
+23. Characters must appear to be naturally acting within the event, not posing for the camera.
+
+24. Prefer visible interaction over static character presentation.
+
+25. When multiple characters are present, preserve meaningful cause-and-effect relationships between their actions and reactions.
+
+26. When the story involves an object, make the character-object interaction physically visible.
+
+27. Use gaze direction and body orientation to reinforce the actual story action.
+
+28. Do not use generic standing poses when the story describes movement or interaction.
+
+29. Do not create a character showcase, fashion pose, lineup or promotional portrait.
+
+30. Do not make every character face the camera.
+
+31. Do not invent actions that contradict the exact story event.
+
+32. The physical action must remain readable even without knowing the original story text.
+
 ================================
 VISUAL QUALITY
 ================================
 
-Premium cinematic realism,
+Premium cinematic ${styleText} visual quality,
 physically believable materials,
 realistic human anatomy,
 natural skin texture,
@@ -287,13 +532,30 @@ professional cinematography,
 high visual fidelity,
 cinematic color grading,
 detailed background,
-strong subject separation.
+strong subject separation,
+natural body language,
+believable physical interaction,
+clear visual storytelling.
 
 ================================
 FINAL DIRECTOR INSTRUCTION
 ================================
 
-The generated image must look like a frame taken directly from THIS exact story scene.
+The generated image must look like a frame taken directly from THIS exact story scene during the actual event.
+
+The characters are actors performing the event.
+
+The image must show what is HAPPENING, not merely who is present.
+
+Prioritize:
+STORY EVENT
+→ PHYSICAL ACTION
+→ CHARACTER INTERACTION
+→ REACTION
+→ BODY LANGUAGE
+→ GAZE
+→ ENVIRONMENTAL PARTICIPATION
+→ CINEMATIC COMPOSITION
 
 Do not reinterpret the entire story.
 
@@ -302,6 +564,10 @@ Do not summarize the story.
 Do not create a poster.
 
 Do not create a generic cinematic image.
+
+Do not create a character showcase.
+
+Do not create a posed character lineup.
 
 Create the exact physical moment described above.
 `.trim();
@@ -360,3 +626,13 @@ export default function ImagePromptEngine({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+

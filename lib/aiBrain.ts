@@ -1,7 +1,9 @@
-export type CharacterData = {
+﻿export type CharacterData = {
   characterId?: string;
   name?: string;
   role?: string;
+  gender?: string;
+  voiceType?: string;
   age?: string;
   appearance?: string;
   faceStructure?: string;
@@ -20,9 +22,23 @@ export type CharacterData = {
 export type SceneCharacterData = {
   characterId?: string;
   name?: string;
+  gender?: string;
   age?: string;
+
+  // Immutable character identity
   appearance?: string;
+  faceStructure?: string;
+  skinTone?: string;
+  hair?: string;
+  eyes?: string;
+  bodyType?: string;
+  distinctiveFeatures?: string;
   clothing?: string;
+  footwear?: string;
+  accessories?: string;
+  visualIdentity?: string;
+
+  // Scene-specific performance
   action?: string;
   emotion?: string;
   positionInFrame?: string;
@@ -52,28 +68,53 @@ export type SceneCompositionData = {
 
 export type SceneData = {
   title: string;
+  duration: number;
 
+  // Narrative structure
   storyPurpose?: string;
+  sceneObjective?: string;
+
+  // Scene timing / location
   time?: string;
   location?: string;
 
+  // Characters performing inside the scene
   characters?: SceneCharacterData[];
 
+  // Cinematic acting structure
   action?: string;
+  interaction?: string;
+  reaction?: string;
+  movement?: string;
   emotion?: string;
+  environmentInteraction?: string;
 
+  // Environment / lighting / composition
   environment?: SceneEnvironmentData;
-
   lighting?: SceneLightingData;
-
   composition?: SceneCompositionData;
 
+  // Generated visual keyframe
   visual: string;
+
+  // Camera direction
   camera: string;
 
+  // Continuity between scenes
   continuity?: string;
 
+  // Audio planning
   voice: string;
+
+  dialogue?: Array<{
+    speakerName: string;
+    characterType?: string;
+    line: string;
+  }>;
+
+  // Sound design
+  sfxPrompt?: string;
+  musicMood?: string;
 };
 
 export type StoryData = {
@@ -81,273 +122,280 @@ export type StoryData = {
   hook: string;
   directorVision: string;
   mood: string;
-
   characters?: CharacterData[];
-
   scenes: SceneData[];
-
   status: string;
 };
 
-export function analyzeIdea(idea: string): StoryData {
-  const scenes: SceneData[] = [
-    {
-      title: "Scene 1",
+/**
+ * Fallback local story analyzer.
+ *
+ * NOTE:
+ * The main production story is currently generated through
+ * /api/generate-story -> lib/ai-provider.ts.
+ *
+ * This function remains as a safe local fallback and keeps
+ * the StoryData structure compatible with the production pipeline.
+ */
+export function analyzeIdea(
+  idea: string,
+  totalDurationSeconds: number = 30,
+  style: string = "Pixar",
+  aspectRatio: string = "9:16"
+): StoryData {
+  const sceneDuration = 5;
 
-      storyPurpose:
-        "Establish the beginning of the story and introduce the main character.",
+  const calculatedSceneCount = Math.max(
+    2,
+    Math.round(totalDurationSeconds / sceneDuration)
+  );
 
-      time:
-        "Beginning of the story, natural daytime lighting.",
+  const normalizedStyle = style.toLowerCase();
 
-      location:
-        "A location appropriate to the user's story.",
+  const isPixarStyle =
+    normalizedStyle.includes("pixar") ||
+    normalizedStyle.includes("3d");
 
-      characters: [
-        {
-          characterId: "character_1",
-          name: "Main Character",
-          age: "Age appropriate to the beginning of the story.",
-          appearance:
-            "Appearance should be determined from the story idea.",
-          clothing:
-            "Clothing appropriate to the character, location and time period.",
-          action:
-            "Performing the exact opening action of the story.",
-          emotion:
-            "Emotion appropriate to the beginning of the story.",
-          positionInFrame:
-            "Primary subject clearly visible in the main area of the frame.",
-        },
-      ],
+  const scenes: SceneData[] = [];
 
-      action:
-        `The opening event of the story related directly to: ${idea}`,
-
-      emotion:
-        "Emotion appropriate to the beginning of the story.",
-
-      environment: {
-        description:
-          `A detailed environment appropriate to the story idea: ${idea}`,
-        foreground:
-          "Natural foreground elements relevant to the location.",
-        background:
-          "Background elements that establish the story location.",
-        props: [],
-      },
-
-      lighting: {
-        source: "Natural or practical lighting appropriate to the location.",
-        direction: "Physically believable lighting direction.",
-        quality: "Natural cinematic lighting.",
-        mood: "Emotionally appropriate to the opening.",
-      },
-
-      composition: {
-        shotType: "Wide cinematic establishing shot",
-        cameraAngle: "Eye level",
-        lens: "35mm cinematic lens",
-        depthOfField:
-          "Moderate depth of field keeping the main subject recognizable.",
-        framing:
-          "Clear cinematic framing with the main subject as the visual focus.",
-      },
-
-      visual:
-        `Opening moment of the story about ${idea}. Show one exact physical moment with a clearly defined main character, environment, action, emotion, clothing and relevant objects.`,
-
-      camera:
-        "Wide cinematic establishing composition showing the environment and main character clearly.",
-
-      continuity:
-        "Establish the main character's visual identity for future scenes.",
-
-      voice:
-        "Every great story begins with a single defining moment.",
-    },
-
-    {
-      title: "Scene 2",
-
-      storyPurpose:
-        "Develop the story by showing the next major event or challenge.",
-
-      time:
-        "Later chronological moment in the story.",
-
-      location:
-        "A location directly connected to the story progression.",
-
-      characters: [
-        {
-          characterId: "character_1",
-          name: "Main Character",
-          age: "Age appropriate to this point in the story.",
-          appearance:
-            "Maintain recognizable identity from Scene 1.",
-          clothing:
-            "Clothing appropriate to the character's current situation.",
-          action:
-            "Performing the next major action in the story.",
-          emotion:
-            "Emotion appropriate to the current event.",
-          positionInFrame:
-            "Clearly visible as the primary subject.",
-        },
-      ],
-
-      action:
-        `The next major event directly related to: ${idea}`,
-
-      emotion:
-        "Emotion showing the development or challenge of the story.",
-
-      environment: {
-        description:
-          "A detailed environment showing the story's development.",
-        foreground:
-          "Objects and environmental details physically close to the camera.",
-        background:
-          "Background details that reinforce the location and story.",
-        props: [],
-      },
-
-      lighting: {
-        source: "Lighting appropriate to the scene location and time.",
-        direction: "Physically believable lighting direction.",
-        quality: "Natural cinematic lighting.",
-        mood: "Tension, curiosity or emotion appropriate to the story.",
-      },
-
-      composition: {
-        shotType: "Medium cinematic shot",
-        cameraAngle: "Three-quarter eye-level angle",
-        lens: "50mm cinematic lens",
-        depthOfField:
-          "Shallow-to-moderate depth of field separating the character from the background.",
-        framing:
-          "Character-focused composition while preserving important environmental context.",
-      },
-
-      visual:
-        `The next specific moment in the story about ${idea}. Show one exact event, with the same recognizable character identity and a clearly defined environment, action and emotional state.`,
-
-      camera:
-        "Medium cinematic composition focused on the character and the exact action occurring at this moment.",
-
-      continuity:
-        "Maintain the same character identity, facial characteristics and recognizable visual traits established in Scene 1.",
-
-      voice:
-        "The journey moves forward, and the next moment changes everything.",
-    },
-
-    {
-      title: "Scene 3",
-
-      storyPurpose:
-        "Show the major climax or final story event.",
-
-      time:
-        "Final chronological moment of the story.",
-
-      location:
-        "The exact location where the climax or ending occurs.",
-
-      characters: [
-        {
-          characterId: "character_1",
-          name: "Main Character",
-          age: "Age appropriate to the final moment.",
-          appearance:
-            "Maintain the same recognizable identity established earlier.",
-          clothing:
-            "Clothing appropriate to the final event.",
-          action:
-            "Performing the exact final story action.",
-          emotion:
-            "Strong emotion appropriate to the climax or ending.",
-          positionInFrame:
-            "Primary visual subject clearly visible.",
-        },
-      ],
-
-      action:
-        `The final major event directly related to: ${idea}`,
-
-      emotion:
-        "Strong emotional reaction appropriate to the story's climax.",
-
-      environment: {
-        description:
-          "A highly detailed environment appropriate to the final event.",
-        foreground:
-          "Important objects and environmental details near the camera.",
-        background:
-          "Background elements that clearly establish the final location.",
-        props: [],
-      },
-
-      lighting: {
-        source: "Lighting appropriate to the final environment.",
-        direction: "Physically believable cinematic lighting direction.",
-        quality: "Detailed cinematic lighting.",
-        mood: "Strong emotional climax.",
-      },
-
-      composition: {
-        shotType: "Medium close-up cinematic shot",
-        cameraAngle: "Dramatic three-quarter angle",
-        lens: "50mm cinematic lens",
-        depthOfField:
-          "Shallow cinematic depth of field emphasizing the character and key story object.",
-        framing:
-          "Strong subject-focused framing emphasizing the final story moment.",
-      },
-
-      visual:
-        `Final specific moment of the story about ${idea}. Show the exact climax or ending event, with the established character identity, precise environment, physical action and visible emotional reaction.`,
-
-      camera:
-        "Dramatic cinematic framing focused on the character's final important action and emotional reaction.",
-
-      continuity:
-        "Preserve the same recognizable character identity established in the previous scenes.",
-
-      voice:
-        "The journey reaches its defining moment.",
-    },
+  const actionBeats = [
+    "The protagonist notices something important in the environment, pauses, turns toward it, and reacts naturally.",
+    "The protagonist approaches the important object or situation, reaches toward it, touches it, and physically interacts with it.",
+    "The protagonist attempts to solve the immediate problem through a clear physical action, showing effort and emotional reaction.",
+    "A new development interrupts the action. The protagonist turns, reacts, and physically responds to what changed.",
+    "The protagonist and the environment respond to the consequence of the previous action, creating visible narrative progression.",
+    "The protagonist completes the immediate objective through a decisive physical action, followed by a natural emotional reaction."
   ];
+
+  const emotionalBeats = [
+    "curious and alert",
+    "cautious but determined",
+    "focused and emotionally engaged",
+    "surprised and reactive",
+    "relieved and emotionally affected",
+    "satisfied and hopeful"
+  ];
+
+  for (let i = 0; i < calculatedSceneCount; i++) {
+    const sceneNum = i + 1;
+    const beatIndex = Math.min(i, actionBeats.length - 1);
+
+    const action = `${actionBeats[beatIndex]} The action must directly relate to: ${idea}`;
+
+    const interaction =
+      "The protagonist physically interacts with a story-relevant object or environmental element.";
+
+    const reaction =
+      "The protagonist visibly reacts through eye direction, facial expression, body posture, and purposeful movement.";
+
+    const movement =
+      "The protagonist moves naturally through physical space toward or away from the story-relevant event.";
+
+    const environmentInteraction =
+      "The protagonist physically occupies and affects the environment while performing the action.";
+
+    const voiceText =
+      i === 0
+        ? `في بداية الحكاية ${idea}`
+        : i === calculatedSceneCount - 1
+          ? "وهكذا تصل الحكاية إلى لحظتها الأخيرة ويبقى أثر ما حدث واضحا."
+          : "تتغير الأحداث ويتفاعل البطل مع ما يحدث أمامه.";
+
+    const sceneObjective =
+      i === 0
+        ? `Establish the situation and respond to the first important event related to ${idea}.`
+        : i === calculatedSceneCount - 1
+          ? `Complete the immediate objective and resolve the current event related to ${idea}.`
+          : `Advance the story through a concrete physical event related to ${idea}.`;
+
+    scenes.push({
+      title: `Scene ${sceneNum}`,
+
+      duration: sceneDuration,
+
+      storyPurpose:
+        i === 0
+          ? `Establish the situation and trigger the first action related to ${idea}.`
+          : i === calculatedSceneCount - 1
+            ? `Resolve the immediate narrative action related to ${idea}.`
+            : `Advance the story through a visible physical event and reaction related to ${idea}.`,
+
+      sceneObjective,
+
+      time:
+        i === 0
+          ? "Beginning of the story"
+          : "Continuous chronological progression",
+
+      location: `A specific cinematic environment that directly supports the current event of: ${idea}`,
+
+      characters: [
+        {
+          characterId: "character_1",
+          name: "Main Character",
+          gender: "unknown",
+          age: "Expressive protagonist",
+
+          appearance: isPixarStyle
+            ? "Pixar 3D animated protagonist with expressive facial features and consistent stylized proportions."
+            : "Detailed cinematic protagonist with consistent physical appearance.",
+
+          faceStructure:
+            "Locked facial structure identical across every scene.",
+
+          skinTone:
+            "Locked skin tone identical across every scene.",
+
+          hair:
+            "Locked hairstyle, color, length, and volume identical across every scene.",
+
+          eyes:
+            "Locked eye shape and color identical across every scene.",
+
+          bodyType:
+            "Locked body proportions identical across every scene.",
+
+          distinctiveFeatures:
+            "Locked recognizable facial and physical features.",
+
+          clothing:
+            "Locked signature outfit identical across every scene.",
+
+          footwear:
+            "Locked footwear identical across every scene.",
+
+          accessories:
+            "Locked accessories identical across every scene.",
+
+          visualIdentity:
+            "MASTER CHARACTER LOCK — preserve exact identity, face, hair, body, clothing, footwear and accessories.",
+
+          action,
+
+          emotion: emotionalBeats[beatIndex],
+
+          positionInFrame:
+            "Position determined by the action; never artificially centered for a character showcase."
+        }
+      ],
+
+      action,
+
+      interaction,
+
+      reaction,
+
+      movement,
+
+      emotion: emotionalBeats[beatIndex],
+
+      environmentInteraction,
+
+      environment: {
+        description: `Story-driven cinematic environment physically relevant to the current action and the idea: ${idea}`,
+
+        foreground:
+          "Objects that can be touched, moved, crossed, or interacted with during the action.",
+
+        background:
+          "Narratively relevant environment with visible depth and continuity.",
+
+        props: [
+          `Story-specific interactive object related to ${idea}`,
+          "Environment elements that react naturally to the protagonist's actions."
+        ]
+      },
+
+      lighting: {
+        source: "Motivated environmental cinematic lighting",
+        direction: "Natural directional light appropriate to the location",
+        quality: "Cinematic physically motivated lighting",
+        mood: emotionalBeats[beatIndex]
+      },
+
+      composition: {
+        shotType:
+          i % 3 === 0
+            ? "Cinematic medium shot showing character and environment interaction"
+            : i % 3 === 1
+              ? "Cinematic medium close-up capturing action and reaction"
+              : "Cinematic wider shot establishing physical movement and environment",
+
+        cameraAngle:
+          i % 2 === 0
+            ? "Natural eye-level perspective following the action"
+            : "Slight dynamic angle supporting the physical event",
+
+        lens: "Cinematic natural perspective",
+
+        depthOfField:
+          "Selective depth of field while keeping important action readable",
+
+        framing:
+          "Frame the action and environment together; do not isolate the character as a portrait."
+      },
+
+      visual: isPixarStyle
+        ? `Pixar 3D cinematic animated scene about ${idea}. Show a real narrative event, physical interaction, natural movement, reaction, environmental storytelling, and clear cause-and-effect. The character must perform the specified action rather than pose or showcase themselves.`
+        : `Cinematic narrative scene about ${idea}. Show a real narrative event, physical interaction, natural movement, reaction, environmental storytelling, and clear cause-and-effect.`,
+
+      camera:
+        i % 3 === 0
+          ? "Camera naturally follows the character's movement through the environment."
+          : i % 3 === 1
+            ? "Subtle cinematic tracking movement follows the action and reaction."
+            : "Controlled cinematic movement reveals the event and its consequence.",
+
+      continuity:
+        "MASTER CHARACTER LOCK. Exact same face, facial structure, hairstyle, hair color, body proportions, skin tone, clothing, footwear and accessories across all scenes. Preserve environmental and prop continuity. Continue directly from the previous scene.",
+
+      voice: voiceText,
+
+      dialogue: [
+        {
+          speakerName: "الراوي",
+          characterType: "Narrator",
+          line: voiceText
+        }
+      ],
+
+      sfxPrompt:
+        "Natural cinematic environmental sound effects caused by the visible physical actions in this scene. No music and no narration.",
+
+      musicMood:
+        "Subtle cinematic background mood matching the emotional progression of the scene. No dialogue or narration."
+    });
+  }
 
   return {
     concept: idea,
 
-    hook:
-      `A cinematic story begins with ${idea}...`,
+    hook: `A cinematic story about ${idea}.`,
 
     directorVision:
-      "Create a cinematic experience with precise storytelling, strong visual continuity and clear scene progression.",
+      "Story-first cinematic direction. Every scene must contain a concrete event, physical action, interaction, reaction, environmental storytelling, and chronological cause-and-effect. Characters must act within the story rather than pose for the camera.",
 
-    mood:
-      "Emotional cinematic atmosphere",
+    mood: "Cinematic and emotionally driven",
 
     characters: [
       {
         characterId: "character_1",
         name: "Main Character",
-        role: "Main protagonist",
-        age: "Determined by the story.",
-        appearance:
-          "Determined by the story and maintained consistently across scenes.",
+        role: "Main Protagonist",
+        gender: "unknown",
+        age: "Dynamic",
+
+        appearance: isPixarStyle
+          ? "Pixar 3D animated stylized protagonist"
+          : "Detailed cinematic protagonist",
+
         visualIdentity:
-          "Primary visual identity must remain recognizable across every scene.",
-      },
+          "MASTER CHARACTER LOCK — exact facial identity, hair, body proportions, clothing, footwear and accessories must remain unchanged throughout the entire production."
+      }
     ],
 
     scenes,
 
-    status:
-      "Idea analyzed successfully.",
+    status: `Generated ${scenes.length} story-driven cinematic scenes for ${totalDurationSeconds}s duration.`
   };
 }

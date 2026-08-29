@@ -9,19 +9,19 @@ export default function DirectorPrepareWorkspace({
 }: PrepareWorkspaceProps) {
   return (
     <div className="space-y-6">
-
-      <div className="rounded-2xl border border-cyan-500/20 bg-white/5 p-6">
+      <div className="rounded-3xl border border-cyan-500/30 bg-black/40 p-6 md:p-8 backdrop-blur-xl">
         <h2 className="text-2xl font-bold text-white">
           🎬 AI Director Preparation
         </h2>
 
-        <p className="mt-2 text-gray-400">
-          Review your story, characters, prompts and production plan before generating the final video.
+        <p className="mt-1 text-xs text-gray-400">
+          Review your story, characters, prompts, and production blueprint before launching asset generation.
         </p>
       </div>
 
-      {children}
-
+      <div className="space-y-6">
+        {children}
+      </div>
     </div>
   );
 }

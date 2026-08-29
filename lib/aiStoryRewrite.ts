@@ -10,17 +10,19 @@ export function rewriteScene(
   idea: string,
   style: string = "Cinematic"
 ): Scene {
+  const cleanVisual = scene.visual
+    .replace(/\n\s*Reimagined as[\s\S]*/i, "")
+    .trim();
+  const baseIdea = idea.trim() || "the main narrative";
+
   return {
     ...scene,
-
-    visual: `${scene.visual}
-
-Reimagined as a ${style} scene inspired by "${idea}".`,
-
+    visual: `${cleanVisual} — Enhanced as a ${style} cinematic scene inspired by "${baseIdea}".`,
     camera:
-      "Epic cinematic drone shot with dramatic lighting and dynamic movement.",
-
+      scene.camera ||
+      "Epic cinematic drone shot with dramatic volumetric lighting and dynamic framing.",
     voice:
-      `A new chapter begins. This scene has been rewritten around the idea "${idea}".`,
+      scene.voice ||
+      `A new chapter begins. This scene advances the story around "${baseIdea}".`,
   };
 }

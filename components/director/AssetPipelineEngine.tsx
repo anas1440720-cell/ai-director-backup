@@ -33,18 +33,19 @@ export default function AssetPipelineEngine({ scenes }: Props) {
   }
 
   return (
-    <div className="mt-8 border rounded-xl p-6">
-      <h2 className="text-xl font-bold">
+    <div className="mt-8 rounded-3xl border border-white/10 bg-black/40 p-6 md:p-8 backdrop-blur-xl">
+      <h2 className="text-xl font-bold text-white">
         🚀 Asset Pipeline Engine
       </h2>
 
-      <p className="mt-2">
+      <p className="mt-1 text-xs text-gray-400">
         Manage production assets per scene.
       </p>
 
       <button
+        type="button"
         onClick={generateImages}
-        className="mt-4 px-4 py-2 rounded bg-black text-white"
+        className="mt-6 rounded-xl bg-cyan-500 px-6 py-3 text-xs font-bold text-black transition hover:bg-cyan-400"
       >
         Generate Scene Images
       </button>
@@ -53,30 +54,26 @@ export default function AssetPipelineEngine({ scenes }: Props) {
         {assets.map((asset) => (
           <div
             key={asset.scene}
-            className="border p-4 rounded"
+            className="rounded-2xl border border-white/10 bg-white/5 p-4"
           >
-            <h3>
+            <h3 className="font-bold text-white text-sm">
               🎬 Scene {asset.scene}
             </h3>
 
-            <p>
-              🖼 Image:{" "}
-              {asset.image === "ready"
-                ? "✅ Ready"
-                : "⏳ Waiting"}
-            </p>
-
-            <p>
-              🎥 Video: ⏳ Waiting
-            </p>
-
-            <p>
-              🎙 Voice: ⏳ Waiting
-            </p>
-
-            <p>
-              🎵 Music: ⏳ Waiting
-            </p>
+            <div className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
+              <span className={asset.image === "ready" ? "text-green-400" : "text-gray-400"}>
+                🖼️ Image: {asset.image === "ready" ? "✅ Ready" : "⏳ Waiting"}
+              </span>
+              <span className="text-gray-400">
+                🎥 Video: ⏳ Waiting
+              </span>
+              <span className="text-gray-400">
+                🎙️ Voice: ⏳ Waiting
+              </span>
+              <span className="text-gray-400">
+                🎵 Music: ⏳ Waiting
+              </span>
+            </div>
           </div>
         ))}
       </div>

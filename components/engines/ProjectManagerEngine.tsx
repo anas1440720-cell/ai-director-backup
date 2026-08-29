@@ -5,90 +5,138 @@ import { useState } from "react";
 interface ProjectManagerEngineProps {
   idea: string;
   storyData: any;
+  onLoadProject?: (projectData: any) => void;
+  onRenameProject?: (newName: string) => void;
+  onResetProject?: () => void;
 }
 
 export default function ProjectManagerEngine({
   idea,
   storyData,
+  onLoadProject,
+  onRenameProject,
+  onResetProject,
 }: ProjectManagerEngineProps) {
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [currentIdeaName, setCurrentIdeaName] = useState(idea);
+
+  const showNotification = (msg: string) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(null), 3500);
+  };
 
   const handleSave = () => {
+    if (typeof window === "undefined") return;
     const project = {
-      idea,
+      idea: currentIdeaName || idea,
       storyData,
       savedAt: new Date().toISOString(),
     };
+    localStorage.setItem("ai-director-project", JSON.stringify(project));
+    showNotification("✅ Project saved locally!");
+  };
 
-    localStorage.setItem(
-      "ai-director-project",
-      JSON.stringify(project)
-    );
+  const handleLoad = () => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("ai-director-project");
+    if (!saved) {
+      showNotification("⚠️ No saved project found in storage.");
+      return;
+    }
 
-    setMessage("✅ Project saved successfully!");
+    try {
+      const parsed = JSON.parse(saved);
+      setCurrentIdeaName(parsed.idea || "Untitled AI Project");
+      onLoadProject?.(parsed);
+      showNotification("📂 Project loaded successfully!");
+    } catch {
+      showNotification("❌ Failed to parse saved project data.");
+    }
+  };
+
+  const handleRename = () => {
+    const newName = window.prompt("Enter new project title:", currentIdeaName || idea);
+    if (newName && newName.trim()) {
+      setCurrentIdeaName(newName.trim());
+      onRenameProject?.(newName.trim());
+      showNotification("✏️ Project renamed.");
+    }
+  };
+
+  const handleDelete = () => {
+    if (typeof window === "undefined") return;
+    if (window.confirm("Are you sure you want to clear saved project data?")) {
+      localStorage.removeItem("ai-director-project");
+      onResetProject?.();
+      showNotification("🗑️ Saved project deleted.");
+    }
   };
 
   return (
-    <div className="mt-8 rounded-2xl border border-gray-700 bg-gray-900 p-6">
-      <h2 className="text-2xl font-bold mb-6">
-        🎛️ Project Manager
-      </h2>
+    <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
+      <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div>
+          <h3 className="text-xl font-bold text-white">🎛️ Project Manager</h3>
+          <p className="mt-1 text-xs text-gray-400">
+            Local session state management, backup snapshots, and restore actions.
+          </p>
+        </div>
+        <span className="rounded-xl border border-blue-400/30 bg-blue-400/10 px-3 py-1 text-xs font-bold text-blue-300">
+          State Active
+        </span>
+      </div>
 
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="mt-5 flex flex-wrap gap-2.5">
         <button
-          id="save-project-btn"
+          type="button"
           onClick={handleSave}
-          className="rounded-lg bg-blue-600 px-5 py-3 font-semibold hover:bg-blue-700 transition"
+          className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-500"
         >
-          💾 Save
+          💾 Save Snapshot
         </button>
 
         <button
-          id="load-project-btn"
-          className="rounded-lg bg-green-600 px-5 py-3 font-semibold hover:bg-green-700 transition"
+          type="button"
+          onClick={handleLoad}
+          className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-500"
         >
-          📂 Load
+          📂 Load Saved
         </button>
 
         <button
-          id="rename-project-btn"
-          className="rounded-lg bg-yellow-600 px-5 py-3 font-semibold hover:bg-yellow-700 transition"
+          type="button"
+          onClick={handleRename}
+          className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-xs font-bold text-yellow-300 transition hover:bg-yellow-500/20"
         >
           ✏️ Rename
         </button>
 
         <button
-          id="delete-project-btn"
-          className="rounded-lg bg-red-600 px-5 py-3 font-semibold hover:bg-red-700 transition"
+          type="button"
+          onClick={handleDelete}
+          className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-300 transition hover:bg-red-500/20"
         >
-          🗑 Delete
+          🗑️ Clear Storage
         </button>
       </div>
 
-      <div className="rounded-xl bg-gray-800 p-4">
-        <h3 className="font-semibold mb-3">
-          📊 Current Project
-        </h3>
-
-        <p>
-          <strong>Idea:</strong>{" "}
-          {idea || "No project loaded"}
-        </p>
-
-        <p className="mt-2">
-          <strong>Status:</strong> Ready
-        </p>
-
-        <p className="mt-2">
-          <strong>Last Save:</strong>{" "}
-          {message ? "Saved" : "Not Saved"}
-        </p>
+      <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <h4 className="text-xs font-bold text-gray-400">📊 Active Snapshot Information</h4>
+        <div className="mt-3 space-y-1.5 text-xs text-gray-300">
+          <p>
+            <span className="font-semibold text-white">Title:</span>{" "}
+            {currentIdeaName || idea || "Untitled AI Project"}
+          </p>
+          <p>
+            <span className="font-semibold text-white">Status:</span> Production Ready
+          </p>
+        </div>
       </div>
 
       {message && (
-        <p className="mt-4 text-green-400 font-medium">
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/10 p-3 text-xs font-medium text-white">
           {message}
-        </p>
+        </div>
       )}
     </div>
   );

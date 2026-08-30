@@ -1,0 +1,1694 @@
+﻿"use client";
+const ECONOMY_TEST_MODE = true;
+import { useEffect, useRef, useState } from "react";
+
+import { generateImage as generateImageAsset } from "@/lib/imageGenerator";
+
+
+type ProductionGeneratorProps = {
+  idea: string;
+  imagePrompts: string[];
+  videoPrompts: string[];
+  voiceScripts: string[];
+  musicTimeline: string[];
+
+  imageProvider?:
+  | "gemini"
+  | "cloudflare"
+  | "pollinations";
+  duration?: string;
+  aspectRatio?: string;
+
+  onImageGenerated?: (
+    index: number,
+    imageUrl: string
+  ) => void;
+
+  onVideoGenerated?: (
+    index: number,
+    videoUri: string
+  ) => void;
+
+  onVoiceGenerated?: (
+    index: number,
+    audioUrl: string
+  ) => void;
+
+  onMusicGenerated?: (
+    index: number,
+    audioUrl: string
+  ) => void;
+
+  onGenerationError?: (
+    message: string
+  ) => void;
+};
+
+const ECONOMY_TEST_MODE = true;
+
+export default function ProductionGeneratorEngine({
+  idea,
+  imagePrompts,
+  videoPrompts,
+  voiceScripts,
+  musicTimeline,
+ imageProvider = "gemini",
+duration,
+aspectRatio,
+  onImageGenerated,
+  onVideoGenerated,
+  onVoiceGenerated,
+  onMusicGenerated,
+  onGenerationError,
+}: ProductionGeneratorProps) {
+  const [images, setImages] = useState<(string | null)[]>(
+    imagePrompts.map(() => null)
+  );
+
+  const [videos, setVideos] = useState<(string | null)[]>(
+    videoPrompts.map(() => null)
+  );
+
+const [voiceAudios, setVoiceAudios] = useState<
+  (string | null)[]
+>(
+  voiceScripts.map(() => null)
+);
+const [musicAudios, setMusicAudios] = useState<
+  (string | null)[]
+>(
+  musicTimeline.map(() => null)
+);
+
+const [loadingMusicIndex, setLoadingMusicIndex] =
+  useState<number | null>(null);
+
+const [autoMusicIndex, setAutoMusicIndex] =
+  useState<number | null>(null);
+
+const musicGenerationStartedRef =
+  useRef<string | null>(null);
+const [loadingVoiceIndex, setLoadingVoiceIndex] =
+  useState<number | null>(null);
+
+const [autoVoiceIndex, setAutoVoiceIndex] =
+  useState<number | null>(null);
+
+const voiceGenerationStartedRef =
+  useRef<string | null>(null);
+  const [loadingImageIndex, setLoadingImageIndex] =
+    useState<number | null>(null);
+
+  const [loadingVideoIndex, setLoadingVideoIndex] =
+    useState<number | null>(null);
+
+  const [error, setError] = useState<string | null>(null);
+
+  const [autoVideoIndex, setAutoVideoIndex] =
+    useState<number | null>(null);
+
+  const [autoMode, setAutoMode] = useState(true);
+
+  const imageGenerationKeyRef = useRef<string | null>(null);
+
+  const videoGenerationStartedRef = useRef<string | null>(null);
+
+  // ============================================
+  // PROJECT DURATION
+  // ============================================
+
+  const getProjectDuration = () => {
+    const parsed = Number(duration);
+
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 5;
+    }
+
+    return Math.max(5, Math.round(parsed));
+  };
+
+  // ============================================
+  // SCENE DURATION
+  // ============================================
+
+  const getSceneDuration = (index: number) => {
+    const projectDuration = getProjectDuration();
+
+    const sceneCount = Math.max(
+      videoPrompts.length,
+      imagePrompts.length,
+      1
+    );
+
+    /*
+     * Distribute the complete project duration
+     * across all scenes.
+     *
+     * Example:
+     *
+     * 30 seconds / 3 scenes
+     * = 10 seconds per scene
+     *
+     * 60 seconds / 6 scenes
+     * = 10 seconds per scene
+     */
+
+    const baseDuration = Math.floor(
+      projectDuration / sceneCount
+    );
+
+    const remainder =
+      projectDuration % sceneCount;
+
+    const sceneDuration =
+      baseDuration +
+      (index < remainder ? 1 : 0);
+
+    if (ECONOMY_TEST_MODE) {
+  return Math.min(5, Math.max(1, sceneDuration));
+}
+
+return Math.max(1, sceneDuration);
+  };
+
+  // ============================================
+  // IMAGE GENERATION
+  // ============================================
+
+  const generateImage = async (index: number) => {
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null
+    ) {
+      return;
+    }
+
+    if (!imagePrompts[index]) {
+      const message =
+        "No image prompt available.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return;
+    }
+
+    setLoadingImageIndex(index);
+    setError(null);
+
+    try {
+      const result = await generateImageAsset(
+        imagePrompts[index],
+        imageProvider
+      );
+
+      setImages((prev) => {
+        const updated = [...prev];
+        updated[index] = result.imageUrl;
+        return updated;
+      });
+
+      console.log(
+        `ðŸ–¼ Scene ${index + 1} image generated successfully.`
+      );
+
+      onImageGenerated?.(
+        index,
+        result.imageUrl
+      );
+    } catch (err) {
+      console.error(
+        "Image generation error:",
+        err
+      );
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Image generation failed.";
+
+      setError(message);
+      onGenerationError?.(message);
+    } finally {
+      setLoadingImageIndex(null);
+    }
+  };
+
+    // ============================================
+  // GENERATE IMAGES
+  // ECONOMY TEST MODE
+  // ============================================
+
+  useEffect(() => {
+    if (imagePrompts.length === 0) {
+      return;
+    }
+
+    const generationKey =
+      imagePrompts.join("\n");
+
+    if (
+      imageGenerationKeyRef.current ===
+      generationKey
+    ) {
+      return;
+    }
+
+    imageGenerationKeyRef.current =
+      generationKey;
+
+    const generateEconomyImage = async () => {
+      // ECONOMY TEST MODE:
+      // Generate ONLY the first image.
+      await generateImage(0);
+    };
+
+    generateEconomyImage();
+  }, [imagePrompts]);
+
+  // ============================================
+  // VIDEO GENERATION
+  // ============================================
+
+  const generateVideo = async (
+  index: number,
+  manual = false
+): Promise<boolean> => {
+    if (ECONOMY_TEST_MODE && index > 0) {
+    return false;
+  }
+  if (ECONOMY_TEST_MODE && index > 0) {
+  return false;
+}
+   if (
+  loadingImageIndex !== null ||
+  loadingVideoIndex !== null
+) {
+  return false;
+}
+
+    if (!images[index]) {
+  const message =
+    "Please generate the scene image first.";
+
+  setError(message);
+  onGenerationError?.(message);
+
+  return false;
+}
+
+    if (!videoPrompts[index]) {
+  const message =
+    "No video prompt available.";
+
+  setError(message);
+  onGenerationError?.(message);
+
+  return false;
+}
+
+    setLoadingVideoIndex(index);
+    setError(null);
+
+    const sceneDuration =
+      getSceneDuration(index);
+
+    console.log(
+      `ðŸŽ¬ Scene ${index + 1}: ${sceneDuration}s`
+    );
+
+    try {
+      console.log(
+        `ðŸŽ¬ Starting video generation for Scene ${
+          index + 1
+        }...`
+      );
+
+      const response = await fetch(
+        "/api/generate-video",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            prompt: videoPrompts[index],
+            imageUrl: images[index],
+
+            // Send the calculated scene duration.
+            duration: String(sceneDuration),
+
+            // Also send the complete project duration
+            // so the API knows the total requested length.
+            projectDuration: String(
+              getProjectDuration()
+            ),
+            
+            aspectRatio,
+            
+            sceneIndex: index,
+            sceneCount: videoPrompts.length,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+if (!response.ok || !data.success) {
+  if (
+    response.status === 402 ||
+    data.code ===
+      "REPLICATE_INSUFFICIENT_CREDIT"
+  ) {
+    throw new Error(
+      "Video generation stopped: Replicate account has insufficient credit."
+    );
+  }
+
+  if (
+    response.status === 429 ||
+    data.code ===
+      "REPLICATE_RATE_LIMITED"
+  ) {
+    const waitSeconds =
+      Number(data.retryAfter) || 5;
+
+    throw new Error(
+      `Replicate rate limit reached. Wait ${waitSeconds}s before retrying.`
+    );
+  }
+
+  throw new Error(
+    data.message ||
+      "Video generation failed."
+  );
+}
+
+      if (!data.videoUri) {
+        throw new Error(
+          "Video was generated but no video URL was returned."
+        );
+      }
+
+      console.log(
+        `âœ… Scene ${index + 1} video generated successfully.`
+      );
+
+      console.log(
+        `â± Requested scene duration: ${sceneDuration}s`
+      );
+
+      setVideos((prev) => {
+        const updated = [...prev];
+
+        updated[index] =
+          data.videoUri;
+
+        return updated;
+      });
+
+            onVideoGenerated?.(index, data.videoUri);
+
+      return true;
+        } catch (err) {
+      console.error(
+        "Video generation error:",
+        err
+      );
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Video generation failed.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return false;
+    } finally {
+      setLoadingVideoIndex(null);
+    }
+  };
+
+    // ============================================
+  // VIDEO GENERATION
+  // ============================================
+
+  const generateVideo = async (
+    index: number,
+    manual = false
+  ): Promise<boolean> => {
+
+    // ECONOMY TEST MODE:
+    // Generate only Scene 1.
+    if (ECONOMY_TEST_MODE && index > 0) {
+      console.log(
+        `⏸ Economy Test Mode: Video generation stopped after Scene 1.`
+      );
+      return false;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null
+    ) {
+      return false;
+    }
+
+    if (manual) {
+      setAutoMode(false);
+      setAutoVideoIndex(null);
+    }
+
+    if (!images[index]) {
+      const message =
+        "Please generate the scene image first.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return false;
+    }
+
+    if (!videoPrompts[index]?.trim()) {
+      const message =
+        "No video prompt available.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return false;
+    }
+
+    setLoadingVideoIndex(index);
+    setError(null);
+
+    // ECONOMY TEST:
+    // Force the shortest possible test duration.
+    const sceneDuration = ECONOMY_TEST_MODE
+      ? 5
+      : getSceneDuration(index);
+
+    console.log(
+      `🎬 Scene ${index + 1}: ${sceneDuration}s`
+    );
+
+    try {
+      console.log(
+        `🎬 Starting video generation for Scene ${
+          index + 1
+        }...`
+      );
+
+      const response = await fetch(
+        "/api/generate-video",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            prompt: videoPrompts[index],
+
+            imageUrl: images[index],
+
+            duration: String(sceneDuration),
+
+            projectDuration: String(
+              ECONOMY_TEST_MODE
+                ? 5
+                : getProjectDuration()
+            ),
+
+            aspectRatio,
+
+            sceneIndex: index,
+
+            sceneCount: ECONOMY_TEST_MODE
+              ? 1
+              : videoPrompts.length,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+
+        if (
+          response.status === 402 ||
+          data.code ===
+            "REPLICATE_INSUFFICIENT_CREDIT"
+        ) {
+          throw new Error(
+            "Video generation stopped: Replicate account has insufficient credit."
+          );
+        }
+
+        if (
+          response.status === 429 ||
+          data.code ===
+            "REPLICATE_RATE_LIMITED"
+        ) {
+          const waitSeconds =
+            Number(data.retryAfter) || 5;
+
+          throw new Error(
+            `Replicate rate limit reached. Wait ${waitSeconds}s before retrying.`
+          );
+        }
+
+        throw new Error(
+          data.message ||
+            "Video generation failed."
+        );
+      }
+
+      if (!data.videoUri) {
+        throw new Error(
+          "Video was generated but no video URL was returned."
+        );
+      }
+
+      console.log(
+        `✅ Scene ${index + 1} video generated successfully.`
+      );
+
+      setVideos((prev) => {
+        const updated = [...prev];
+
+        updated[index] =
+          data.videoUri;
+
+        return updated;
+      });
+
+      onVideoGenerated?.(
+        index,
+        data.videoUri
+      );
+
+      return true;
+
+    } catch (err) {
+
+      console.error(
+        "Video generation error:",
+        err
+      );
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Video generation failed.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return false;
+
+    } finally {
+      setLoadingVideoIndex(null);
+    }
+  };
+
+
+  // ============================================
+  // START VIDEO GENERATION
+  // ECONOMY MODE = ONLY FIRST IMAGE
+  // ============================================
+
+  useEffect(() => {
+
+    if (!autoMode) {
+      return;
+    }
+
+    if (
+      imagePrompts.length === 0 ||
+      videoPrompts.length === 0
+    ) {
+      return;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null
+    ) {
+      return;
+    }
+
+    // Economy mode needs only Scene 1.
+    if (ECONOMY_TEST_MODE) {
+
+      if (!images[0]) {
+        return;
+      }
+
+      if (!videoPrompts[0]?.trim()) {
+        return;
+      }
+
+      if (videos[0]) {
+        return;
+      }
+
+      if (
+        videoGenerationStartedRef.current ===
+        "ECONOMY_VIDEO_SCENE_1"
+      ) {
+        return;
+      }
+
+      videoGenerationStartedRef.current =
+        "ECONOMY_VIDEO_SCENE_1";
+
+      setAutoVideoIndex(0);
+
+      return;
+    }
+
+    // ========================================
+    // NORMAL FULL MODE
+    // ========================================
+
+    const allImagesReady =
+      imagePrompts.every(
+        (_, index) =>
+          Boolean(images[index])
+      );
+
+    if (!allImagesReady) {
+      return;
+    }
+
+    const generationKey =
+      videoPrompts.join("\n") +
+      "\nIMAGES\n" +
+      images.join("\n");
+
+    if (
+      videoGenerationStartedRef.current ===
+      generationKey
+    ) {
+      return;
+    }
+
+    videoGenerationStartedRef.current =
+      generationKey;
+
+    setAutoVideoIndex(0);
+
+  }, [
+    autoMode,
+    imagePrompts,
+    videoPrompts,
+    images,
+    videos,
+    loadingImageIndex,
+    loadingVideoIndex,
+  ]);
+
+
+   // ============================================
+  // AUTO VIDEO SEQUENCE
+  // ECONOMY TEST MODE
+  // ============================================
+
+  useEffect(() => {
+    if (!autoMode) {
+      return;
+    }
+
+    if (autoVideoIndex === null) {
+      return;
+    }
+
+    if (
+      autoVideoIndex >=
+      videoPrompts.length
+    ) {
+      setAutoVideoIndex(null);
+      return;
+    }
+
+    // ECONOMY TEST MODE:
+    // Only generate Scene 1 video.
+    if (
+      ECONOMY_TEST_MODE &&
+      autoVideoIndex > 0
+    ) {
+      setAutoVideoIndex(null);
+      return;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null
+    ) {
+      return;
+    }
+
+    if (!images[autoVideoIndex]) {
+      return;
+    }
+
+    if (!videoPrompts[autoVideoIndex]?.trim()) {
+      setAutoVideoIndex(null);
+      return;
+    }
+
+    if (videos[autoVideoIndex]) {
+      setAutoVideoIndex(null);
+      return;
+    }
+
+    const currentIndex =
+      autoVideoIndex;
+
+    const generateCurrentVideo =
+      async () => {
+        const success =
+          await generateVideo(
+            currentIndex
+          );
+
+        if (!success) {
+          console.warn(
+            `⏸ Economy video generation stopped at Scene ${
+              currentIndex + 1
+            }.`
+          );
+
+          setAutoVideoIndex(null);
+          return;
+        }
+
+        // ECONOMY TEST MODE:
+        // Stop after the first video.
+        if (ECONOMY_TEST_MODE) {
+          console.log(
+            "💰 Economy test mode: first video completed. Stopping video generation."
+          );
+
+          setAutoVideoIndex(null);
+          return;
+        }
+
+        setAutoVideoIndex(
+          (current) =>
+            current === null
+              ? null
+              : current + 1
+        );
+      };
+
+    generateCurrentVideo();
+  }, [
+    autoMode,
+    autoVideoIndex,
+    videoPrompts,
+    images,
+    videos,
+    loadingImageIndex,
+    loadingVideoIndex,
+  ]);
+
+  const generateVoice = async (
+  index: number
+): Promise<boolean> => {
+  if (ECONOMY_TEST_MODE && index > 0) {
+    return false;
+  }
+
+    // ECONOMY TEST MODE:
+    // Generate only Scene 1 voice.
+    if (ECONOMY_TEST_MODE && index > 0) {
+      console.log(
+        `⏸ Economy Test Mode: Voice generation stopped after Scene 1.`
+      );
+      return false;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null ||
+      loadingVoiceIndex !== null
+    ) {
+      return false;
+    }
+
+    if (!voiceScripts[index]?.trim()) {
+      const message =
+        "No voice script available.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return false;
+    }
+
+    setLoadingVoiceIndex(index);
+    setError(null);
+
+    try {
+
+      const response = await fetch(
+        "/api/generate-voice",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            text:
+              voiceScripts[index].trim(),
+          }),
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+            data.message ||
+            "Voice generation failed."
+        );
+      }
+
+      if (!data.audio) {
+        throw new Error(
+          "Voice was generated but no audio data was returned."
+        );
+      }
+
+      const mimeType =
+        data.mimeType ||
+        "audio/wav";
+
+      const binaryString =
+        atob(data.audio);
+
+      const bytes =
+        new Uint8Array(
+          binaryString.length
+        );
+
+      for (
+        let i = 0;
+        i < binaryString.length;
+        i++
+      ) {
+        bytes[i] =
+          binaryString.charCodeAt(i);
+      }
+
+      const blob =
+        new Blob(
+          [bytes],
+          {
+            type: mimeType,
+          }
+        );
+
+      const audioUrl =
+        URL.createObjectURL(blob);
+
+      setVoiceAudios((prev) => {
+
+        const updated = [
+          ...prev,
+        ];
+
+        updated[index] =
+          audioUrl;
+
+        return updated;
+      });
+
+      onVoiceGenerated?.(
+        index,
+        audioUrl
+      );
+
+      console.log(
+        `🎙️ Scene ${
+          index + 1
+        } voice generated successfully.`
+      );
+
+      return true;
+
+    } catch (err) {
+
+      console.error(
+        "Voice generation error:",
+        err
+      );
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Voice generation failed.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return false;
+
+    } finally {
+      setLoadingVoiceIndex(null);
+    }
+  };
+
+
+  // ============================================
+  // START VOICE GENERATION
+  // ============================================
+
+  useEffect(() => {
+
+    if (!autoMode) {
+      return;
+    }
+
+    if (
+      voiceScripts.length === 0 ||
+      videoPrompts.length === 0
+    ) {
+      return;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null ||
+      loadingVoiceIndex !== null
+    ) {
+      return;
+    }
+
+    // Economy mode:
+    // only Scene 1 video is required.
+    if (ECONOMY_TEST_MODE) {
+
+      if (!videos[0]) {
+        return;
+      }
+
+      if (!voiceScripts[0]?.trim()) {
+        return;
+      }
+
+      if (voiceAudios[0]) {
+        return;
+      }
+
+      if (
+        voiceGenerationStartedRef.current ===
+        "ECONOMY_VOICE_SCENE_1"
+      ) {
+        return;
+      }
+
+      voiceGenerationStartedRef.current =
+        "ECONOMY_VOICE_SCENE_1";
+
+      setAutoVoiceIndex(0);
+
+      return;
+    }
+
+    // Normal full mode.
+    const allVideosReady =
+      videoPrompts.every(
+        (_, index) =>
+          Boolean(videos[index])
+      );
+
+    if (!allVideosReady) {
+      return;
+    }
+
+    const generationKey =
+      videoPrompts.join("\n") +
+      "\nVOICE\n" +
+      voiceScripts.join("\n");
+
+    if (
+      voiceGenerationStartedRef.current ===
+      generationKey
+    ) {
+      return;
+    }
+
+    voiceGenerationStartedRef.current =
+      generationKey;
+
+    setAutoVoiceIndex(0);
+
+  }, [
+    autoMode,
+    voiceScripts,
+    videos,
+    videoPrompts,
+    voiceAudios,
+    loadingImageIndex,
+    loadingVideoIndex,
+    loadingVoiceIndex,
+  ]);
+
+
+  // ============================================
+  // AUTO VOICE SEQUENCE
+  // ============================================
+
+  useEffect(() => {
+
+    if (!autoMode) {
+      return;
+    }
+
+    if (autoVoiceIndex === null) {
+      return;
+    }
+
+    // Economy mode = Scene 1 only.
+    if (
+      ECONOMY_TEST_MODE &&
+      autoVoiceIndex > 0
+    ) {
+      setAutoVoiceIndex(null);
+      return;
+    }
+
+    if (
+      autoVoiceIndex >=
+      voiceScripts.length
+    ) {
+      setAutoVoiceIndex(null);
+      return;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null ||
+      loadingVoiceIndex !== null
+    ) {
+      return;
+    }
+
+    const currentIndex =
+      autoVoiceIndex;
+
+    if (!videos[currentIndex]) {
+      return;
+    }
+
+    if (!voiceScripts[currentIndex]?.trim()) {
+      setAutoVoiceIndex(
+        (current) =>
+          current === null
+            ? null
+            : current + 1
+      );
+
+      return;
+    }
+
+    if (voiceAudios[currentIndex]) {
+      setAutoVoiceIndex(
+        (current) =>
+          current === null
+            ? null
+            : current + 1
+      );
+
+      return;
+    }
+
+    const generateCurrentVoice =
+      async () => {
+
+        const success =
+          await generateVoice(
+            currentIndex
+          );
+
+        if (!success) {
+          setAutoVoiceIndex(null);
+          return;
+        }
+
+        // Economy mode stops after Scene 1.
+        if (ECONOMY_TEST_MODE) {
+          setAutoVoiceIndex(null);
+          return;
+        }
+
+        setAutoVoiceIndex(
+          (current) =>
+            current === null
+              ? null
+              : current + 1
+        );
+      };
+
+    generateCurrentVoice();
+
+  }, [
+    autoMode,
+    autoVoiceIndex,
+    videos,
+    voiceAudios,
+    voiceScripts,
+    loadingImageIndex,
+    loadingVideoIndex,
+    loadingVoiceIndex,
+  ]);
+
+
+  // ============================================
+  // MUSIC GENERATION
+  // ============================================
+
+  const generateMusic = async (
+    index: number
+  ): Promise<boolean> => {
+
+    // ECONOMY TEST MODE:
+    // Generate only Scene 1 music.
+    if (ECONOMY_TEST_MODE && index > 0) {
+      console.log(
+        `⏸ Economy Test Mode: Music generation stopped after Scene 1.`
+      );
+      return false;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null ||
+      loadingVoiceIndex !== null ||
+      loadingMusicIndex !== null
+    ) {
+      return false;
+    }
+
+    if (!musicTimeline[index]?.trim()) {
+      const message =
+        "No music prompt available.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return false;
+    }
+
+    setLoadingMusicIndex(index);
+    setError(null);
+
+    try {
+
+      const response =
+        await fetch(
+          "/api/generate-music",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              prompt:
+                musicTimeline[index].trim(),
+
+              duration:
+                ECONOMY_TEST_MODE
+                  ? 5
+                  : getSceneDuration(index),
+
+              sceneIndex:
+                index,
+
+              sceneCount:
+                ECONOMY_TEST_MODE
+                  ? 1
+                  : musicTimeline.length,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            "Music generation failed."
+        );
+      }
+
+      if (!data.audioUri) {
+        throw new Error(
+          "Music was generated but no audio URL was returned."
+        );
+      }
+
+      setMusicAudios((prev) => {
+
+        const updated = [
+          ...prev,
+        ];
+
+        updated[index] =
+          data.audioUri;
+
+        return updated;
+      });
+
+      onMusicGenerated?.(
+        index,
+        data.audioUri
+      );
+
+      console.log(
+        `🎵 Scene ${
+          index + 1
+        } music generated successfully.`
+      );
+
+      return true;
+
+    } catch (err) {
+
+      console.error(
+        "Music generation error:",
+        err
+      );
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Music generation failed.";
+
+      setError(message);
+      onGenerationError?.(message);
+
+      return false;
+
+    } finally {
+      setLoadingMusicIndex(null);
+    }
+  };
+
+
+  // ============================================
+  // START MUSIC GENERATION
+  // ============================================
+
+  useEffect(() => {
+
+    if (!autoMode) {
+      return;
+    }
+
+    if (
+      voiceScripts.length === 0 ||
+      musicTimeline.length === 0
+    ) {
+      return;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null ||
+      loadingVoiceIndex !== null ||
+      loadingMusicIndex !== null
+    ) {
+      return;
+    }
+
+    // Economy mode:
+    // only Scene 1 voice is required.
+    if (ECONOMY_TEST_MODE) {
+
+      if (!voiceAudios[0]) {
+        return;
+      }
+
+      if (!musicTimeline[0]?.trim()) {
+        return;
+      }
+
+      if (musicAudios[0]) {
+        return;
+      }
+
+      if (
+        musicGenerationStartedRef.current ===
+        "ECONOMY_MUSIC_SCENE_1"
+      ) {
+        return;
+      }
+
+      musicGenerationStartedRef.current =
+        "ECONOMY_MUSIC_SCENE_1";
+
+      setAutoMusicIndex(0);
+
+      return;
+    }
+
+    // Normal full mode.
+    const allVoiceReady =
+      voiceScripts.every(
+        (_, index) =>
+          Boolean(voiceAudios[index])
+      );
+
+    if (!allVoiceReady) {
+      return;
+    }
+
+    const generationKey =
+      voiceScripts.join("\n") +
+      "\nMUSIC\n" +
+      musicTimeline.join("\n");
+
+    if (
+      musicGenerationStartedRef.current ===
+      generationKey
+    ) {
+      return;
+    }
+
+    musicGenerationStartedRef.current =
+      generationKey;
+
+    setAutoMusicIndex(0);
+
+  }, [
+    autoMode,
+    voiceScripts,
+    musicTimeline,
+    voiceAudios,
+    musicAudios,
+    loadingImageIndex,
+    loadingVideoIndex,
+    loadingVoiceIndex,
+    loadingMusicIndex,
+  ]);
+
+
+  // ============================================
+  // AUTO MUSIC SEQUENCE
+  // ============================================
+
+  useEffect(() => {
+
+    if (!autoMode) {
+      return;
+    }
+
+    if (autoMusicIndex === null) {
+      return;
+    }
+
+    // Economy mode = Scene 1 only.
+    if (
+      ECONOMY_TEST_MODE &&
+      autoMusicIndex > 0
+    ) {
+      setAutoMusicIndex(null);
+      return;
+    }
+
+    if (
+      autoMusicIndex >=
+      musicTimeline.length
+    ) {
+      setAutoMusicIndex(null);
+      return;
+    }
+
+    if (
+      loadingImageIndex !== null ||
+      loadingVideoIndex !== null ||
+      loadingVoiceIndex !== null ||
+      loadingMusicIndex !== null
+    ) {
+      return;
+    }
+
+    const currentIndex =
+      autoMusicIndex;
+
+    if (!musicTimeline[currentIndex]?.trim()) {
+      setAutoMusicIndex(
+        (current) =>
+          current === null
+            ? null
+            : current + 1
+      );
+
+      return;
+    }
+
+    if (musicAudios[currentIndex]) {
+      setAutoMusicIndex(
+        (current) =>
+          current === null
+            ? null
+            : current + 1
+      );
+
+      return;
+    }
+
+    const generateCurrentMusic =
+      async () => {
+
+        const success =
+  await generateMusic(
+    currentIndex
+  );
+
+if (!success) {
+  console.warn(
+    `⏸ Auto music generation stopped at Scene ${
+      currentIndex + 1
+    }.`
+  );
+
+  setAutoMusicIndex(null);
+  return;
+}
+
+if (ECONOMY_TEST_MODE) {
+  setAutoMusicIndex(null);
+  return;
+}
+          setAutoMusicIndex(null);
+          return;
+        }
+
+        // Economy mode stops after Scene 1.
+        if (ECONOMY_TEST_MODE) {
+          setAutoMusicIndex(null);
+          return;
+        }
+
+        setAutoMusicIndex(
+          (current) =>
+            current === null
+              ? null
+              : current + 1
+        );
+      };
+
+    generateCurrentMusic();
+
+  }, [
+    autoMode,
+    autoMusicIndex,
+    musicTimeline,
+    musicAudios,
+    loadingImageIndex,
+    loadingVideoIndex,
+    loadingVoiceIndex,
+    loadingMusicIndex,
+  ]);
+
+  // ============================================
+  // UI
+  // ============================================
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <h3 className="text-2xl font-bold text-white">
+        ðŸŽ¬ Production Generator Engine
+      </h3>
+
+      <p className="mt-3 text-gray-400">
+        Generate real AI visual assets for
+        each scene.
+      </p>
+
+      <p className="mt-3 text-gray-300">
+        ðŸŽ¥ Project:
+        <span className="ml-2 text-white">
+          {idea}
+        </span>
+      </p>
+
+      <p className="mt-2 text-sm text-gray-400">
+        â± Total Duration:
+        <span className="ml-2 text-white">
+          {getProjectDuration()} seconds
+        </span>
+      </p>
+
+      <p className="mt-1 text-sm text-gray-400">
+        ðŸŽ¬ Scenes:
+        <span className="ml-2 text-white">
+          {videoPrompts.length}
+        </span>
+      </p>
+
+      {/* ERROR */}
+
+      {error && (
+        <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-300">
+          ❌ {error}
+        </div>
+      )}
+
+      <div className="mt-6 space-y-6">
+        {imagePrompts.map((imagePrompt, index) => (
+          <div
+            key={index}
+            className="rounded-2xl border border-white/10 bg-black/20 p-5"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <h4 className="text-lg font-bold text-white">
+                Scene {index + 1}
+              </h4>
+
+              <span className="text-sm text-gray-400">
+                {getSceneDuration(index)}s
+              </span>
+            </div>
+
+            {/* IMAGE */}
+
+            <p className="mt-5 text-sm text-gray-400">
+              🖼️ Image Prompt
+            </p>
+
+            <p className="mt-2 rounded-xl bg-black/30 p-3 text-gray-200 whitespace-pre-wrap">
+              {imagePrompt || "No image prompt available."}
+            </p>
+
+            {images[index] ? (
+              <div className="mt-4">
+                <img
+                  src={images[index] ?? ""}
+                  alt={`Scene ${index + 1}`}
+                  className="w-full rounded-xl border border-white/10"
+                />
+
+                <p className="mt-2 text-sm font-bold text-green-400">
+                  ✅ Image Generated
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => generateImage(index)}
+                disabled={
+                  loadingImageIndex !== null ||
+                  loadingVideoIndex !== null ||
+                  !imagePrompts[index]
+                }
+                className="mt-4 rounded-xl bg-blue-600 px-5 py-3 font-bold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingImageIndex === index
+                  ? "⏳ Generating Image..."
+                  : "🖼️ Generate Image"}
+              </button>
+            )}
+
+            {/* VIDEO */}
+
+            <p className="mt-6 text-sm text-gray-400">
+              🎥 Video Prompt
+            </p>
+
+            <p className="mt-2 rounded-xl bg-black/30 p-3 text-gray-200 whitespace-pre-wrap">
+              {videoPrompts[index] || "No video prompt available."}
+            </p>
+
+            {videos[index] ? (
+              <div className="mt-4">
+                <video
+                  src={videos[index] ?? ""}
+                  controls
+                  playsInline
+                  className="w-full rounded-xl border border-white/10"
+                />
+
+                <p className="mt-2 text-sm font-bold text-green-400">
+                  ✅ Video Generated
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => generateVideo(index)}
+                disabled={
+                  loadingImageIndex !== null ||
+                  loadingVideoIndex !== null ||
+                  !images[index] ||
+                  !videoPrompts[index]
+                }
+                className="mt-4 rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingVideoIndex === index
+                  ? "⏳ Generating Video..."
+                  : "🎥 Generate Video"}
+              </button>
+            )}
+
+            {loadingVideoIndex === index && (
+              <div className="mt-4 rounded-xl border border-yellow-400/20 bg-yellow-400/5 p-4 text-yellow-400">
+                ⏳ Generating Scene {index + 1}...
+
+                <div className="mt-1 text-sm text-yellow-300/70">
+                  Requested duration: {getSceneDuration(index)}s
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+

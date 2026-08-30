@@ -1,0 +1,522 @@
+"use client";
+
+import { useState } from "react";
+
+export type ImagePromptCharacter = {
+  characterId?: string;
+  name?: string;
+  age?: string;
+  appearance?: string;
+  clothing?: string;
+  action?: string;
+  emotion?: string;
+  positionInFrame?: string;
+};
+
+export type ImagePromptScene = {
+  title: string;
+
+  storyPurpose?: string;
+  time?: string;
+  location?: string;
+
+  characters?: ImagePromptCharacter[];
+
+  action?: string;
+  emotion?: string;
+
+  environment?: {
+    description?: string;
+    foreground?: string;
+    background?: string;
+    props?: string[];
+  };
+
+  lighting?: {
+    source?: string;
+    direction?: string;
+    quality?: string;
+    mood?: string;
+  };
+
+  composition?: {
+    shotType?: string;
+    cameraAngle?: string;
+    lens?: string;
+    depthOfField?: string;
+    framing?: string;
+  };
+
+  visual: string;
+  camera: string;
+  continuity?: string;
+  voice: string;
+};
+
+type ImagePromptEngineProps = {
+  scenes: ImagePromptScene[];
+  style?: string;
+};
+
+export type CharacterLock = {
+  characterId: string;
+  name: string;
+  age: string;
+  appearance: string;
+  faceStructure: string;
+  skinTone: string;
+  hair: string;
+  eyes: string;
+  bodyType: string;
+  clothing: string;
+  footwear: string;
+  accessories: string;
+  distinctiveFeatures?: string;
+  visualIdentity?: string;
+};
+
+export function getStyleProfile(style: string = "Realistic") {
+  switch (style) {
+    case "Anime":
+      return {
+        name: "Anime",
+        positive: `
+MANDATORY 2D JAPANESE ANIME STYLE.
+
+Visual medium:
+- 2D anime illustration
+- clean anime linework
+- cel shading
+- anime facial design
+- stylized anime proportions
+- hand-drawn anime visual language
+- anime background illustration
+- expressive anime eyes and facial expressions
+- consistent 2D illustrated appearance
+
+ABSOLUTELY DO NOT USE:
+- photorealistic photography
+- live-action appearance
+- realistic photographic skin
+- realistic human photography
+- Pixar style
+- 3D animated characters
+- CGI character rendering
+- live-action movie appearance
+- photographic portrait aesthetics
+`.trim(),
+        negative:
+          "photorealistic, live action, realistic photography, photographic skin, CGI, 3D animation, Pixar, realistic human portrait",
+      };
+
+    case "3D":
+      return {
+        name: "3D",
+        positive: `
+MANDATORY STYLIZED 3D ANIMATION STYLE.
+
+Visual medium:
+- high-quality 3D animated characters
+- polished 3D materials
+- stylized 3D character design
+- cinematic 3D rendering
+- physically coherent 3D environment
+- expressive 3D facial animation
+- professional animated feature quality
+
+ABSOLUTELY DO NOT USE:
+- 2D anime illustration
+- hand-drawn anime linework
+- live-action photography
+- photorealistic human photography
+- photographic portrait aesthetics
+`.trim(),
+        negative:
+          "2D anime, hand-drawn illustration, live action, photorealistic photography, photographic portrait",
+      };
+
+    case "Pixar":
+      return {
+        name: "Pixar",
+        positive: `
+MANDATORY HIGH-END STYLIZED 3D ANIMATED FEATURE FILM STYLE.
+
+Visual medium:
+- polished stylized 3D animation
+- expressive animated characters
+- appealing stylized proportions
+- high-quality CGI materials
+- cinematic animated lighting
+- detailed 3D environments
+- feature-film animation quality
+- expressive facial animation
+
+ABSOLUTELY DO NOT USE:
+- 2D anime
+- live-action photography
+- photorealistic human photography
+- realistic photographic skin
+- hand-drawn illustration
+`.trim(),
+        negative:
+          "2D anime, live action, photorealistic photography, realistic human photography, hand-drawn illustration",
+      };
+
+    case "Fantasy":
+      return {
+        name: "Fantasy",
+        positive: `
+MANDATORY FANTASY ILLUSTRATION STYLE.
+
+Visual medium:
+- cinematic fantasy artwork
+- richly detailed fantasy illustration
+- imaginative environments
+- stylized fantasy characters
+- atmospheric fantasy lighting
+- dramatic fantasy composition
+- painterly cinematic detail
+
+ABSOLUTELY DO NOT USE:
+- live-action photography
+- photorealistic photography
+- modern photographic aesthetics
+- unrelated visual mediums
+`.trim(),
+        negative:
+          "live action, photorealistic photography, modern photography",
+      };
+
+    case "Realistic":
+    default:
+      return {
+        name: "Realistic",
+        positive: `
+MANDATORY PHOTOREALISTIC LIVE-ACTION CINEMATIC STYLE.
+
+Visual medium:
+- photorealistic live-action photography
+- realistic human anatomy
+- natural skin texture
+- physically believable materials
+- cinematic photography
+- professional film-camera aesthetics
+
+This is the ONLY style where photorealistic live-action
+appearance is permitted.
+`.trim(),
+        negative:
+          "anime illustration, cartoon, 2D animation, stylized 3D animation",
+      };
+  }
+}
+
+/**
+ * Converts one detailed story scene into a production-ready
+ * image generation prompt.
+ */
+export function buildImagePrompt(
+  scene: ImagePromptScene,
+  style: string = "Realistic",
+  characterLocks: CharacterLock[] = []
+): string {
+  const styleProfile = getStyleProfile(style);
+
+  const characters =
+    scene.characters
+      ?.map(
+        (character) =>
+          `CHARACTER:
+Name: ${character.name || "Unnamed character"}
+Character ID: ${character.characterId || "character_1"}
+Age: ${character.age || "Not specified"}
+Appearance: ${character.appearance || "Not specified"}
+Clothing: ${character.clothing || "Not specified"}
+Action: ${character.action || "Not specified"}
+Emotion: ${character.emotion || "Not specified"}
+Position in frame: ${
+            character.positionInFrame || "Not specified"
+          }`
+      )
+      .join("\n\n") ||
+    "No structured character data provided.";
+
+  const characterContinuityLock =
+    characterLocks.length > 0
+      ? characterLocks
+          .map(
+            (character) => `LOCKED CHARACTER IDENTITY:
+Character ID: ${character.characterId}
+Name: ${character.name}
+Age: ${character.age}
+Appearance: ${character.appearance}
+Face Structure: ${character.faceStructure}
+Skin Tone: ${character.skinTone}
+Hair: ${character.hair}
+Eyes: ${character.eyes}
+Body Type: ${character.bodyType}
+Clothing: ${character.clothing}
+Footwear: ${character.footwear}
+Accessories: ${character.accessories}
+Distinctive Features: ${
+              character.distinctiveFeatures ||
+              "Preserve all established distinctive features."
+            }
+Visual Identity: ${
+              character.visualIdentity ||
+              "Preserve the exact established visual identity."
+            }
+
+THIS CHARACTER MUST LOOK THE SAME IN EVERY SCENE.
+DO NOT CHANGE FACE, AGE, BODY TYPE, HAIR, SKIN TONE,
+DISTINCTIVE FEATURES, CLOTHING, FOOTWEAR, ACCESSORIES,
+OR VISUAL IDENTITY.`
+          )
+          .join("\n\n")
+      : "No global character lock provided.";
+
+  const props =
+    scene.environment?.props &&
+    scene.environment.props.length > 0
+      ? scene.environment.props.join(", ")
+      : "No additional important props.";
+
+  return `
+CINEMATIC IMAGE GENERATION PROMPT
+
+Create ONE single image representing ONE exact physical moment
+from the story.
+
+================================
+STYLE LOCK — HIGHEST PRIORITY
+================================
+
+USER SELECTED STYLE:
+${styleProfile.name}
+
+${styleProfile.positive}
+
+STYLE NEGATIVE CONSTRAINTS:
+${styleProfile.negative}
+
+The selected visual medium is FINAL.
+
+Do not reinterpret the selected style.
+Do not replace it with photorealism.
+Do not replace it with live action.
+Do not replace it with another animation style.
+
+================================
+SCENE IDENTITY
+================================
+
+Scene:
+${scene.title}
+
+Story Purpose:
+${scene.storyPurpose || "Show the exact story event."}
+
+Time / Period:
+${scene.time || "Not specified."}
+
+Location:
+${scene.location || "Not specified."}
+
+================================
+GLOBAL CHARACTER CONTINUITY LOCK
+================================
+
+${characterContinuityLock}
+
+================================
+SCENE CHARACTERS
+================================
+
+${characters}
+
+================================
+EXACT STORY ACTION
+================================
+
+Action:
+${scene.action || scene.visual}
+
+Emotion:
+${scene.emotion || "Emotion must match the exact event."}
+
+================================
+ENVIRONMENT
+================================
+
+Environment:
+${
+  scene.environment?.description ||
+  "Detailed environment appropriate to the story."
+}
+
+Foreground:
+${
+  scene.environment?.foreground ||
+  "Natural foreground elements relevant to the location."
+}
+
+Background:
+${
+  scene.environment?.background ||
+  "Detailed background consistent with the location and period."
+}
+
+Important Props:
+${props}
+
+================================
+LIGHTING
+================================
+
+Lighting Source:
+${scene.lighting?.source || "Lighting appropriate to the selected style."}
+
+Lighting Direction:
+${scene.lighting?.direction || "Physically coherent lighting direction."}
+
+Lighting Quality:
+${scene.lighting?.quality || "Lighting consistent with the selected visual medium."}
+
+Lighting Mood:
+${scene.lighting?.mood || "Emotionally appropriate to the exact scene."}
+
+================================
+CAMERA & COMPOSITION
+================================
+
+Shot Type:
+${scene.composition?.shotType || scene.camera}
+
+Camera Angle:
+${scene.composition?.cameraAngle || "Cinematic perspective."}
+
+Lens:
+${scene.composition?.lens || "Appropriate cinematic lens."}
+
+Depth of Field:
+${scene.composition?.depthOfField || "Natural depth of field appropriate to the selected medium."}
+
+Framing:
+${scene.composition?.framing || "Clear subject-focused framing."}
+
+Camera Direction:
+${scene.camera}
+
+================================
+VISUAL DESCRIPTION
+================================
+
+${scene.visual}
+
+================================
+CHARACTER CONTINUITY
+================================
+
+${
+  scene.continuity ||
+  "Maintain the established identity, facial characteristics, body proportions, hair, skin tone and recognizable traits of every recurring character."
+}
+
+================================
+STRICT DIRECTOR RULES
+================================
+
+1. Generate exactly ONE image.
+2. Show exactly ONE moment in time.
+3. Do not combine different story moments.
+4. Do not show multiple ages of the same character.
+5. Do not create montage, collage, split screen or multiple panels.
+6. Do not invent unrelated characters.
+7. Do not invent unrelated objects or scenery.
+8. Preserve the exact character identity.
+9. Preserve the exact clothing.
+10. Preserve the exact environment.
+11. Preserve the exact action.
+12. Preserve the exact emotion.
+13. Follow the specified camera and composition.
+14. Respect the historical, geographical and cultural context.
+15. Prioritize story accuracy over generic decoration.
+16. The selected visual style must remain consistent.
+17. Never convert Anime, 3D, Pixar or Fantasy into photorealism.
+18. Never convert Realistic into anime, cartoon or stylized animation.
+19. Do not introduce a different visual medium.
+20. The final image must visually communicate THIS exact scene.
+
+================================
+FINAL DIRECTOR INSTRUCTION
+================================
+
+Create the exact physical moment described above
+using ONLY the selected visual style.
+
+Do not summarize the story.
+Do not create a poster.
+Do not create a generic cinematic image.
+
+Create THIS exact scene.
+`.trim();
+}
+
+export default function ImagePromptEngine({
+  scenes,
+  style = "Realistic",
+}: ImagePromptEngineProps) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  return (
+    <div>
+      <h3 className="text-xl font-bold text-white">
+        🧠 Image Prompts
+      </h3>
+
+      <p className="mt-3 text-gray-400">
+        Detailed image prompts are available per scene.
+      </p>
+
+      {scenes.map((scene, index) => {
+        const prompt = buildImagePrompt(scene, style);
+        const preview =
+          prompt.replace(/\s+/g, " ").slice(0, 220) + "...";
+        const isOpen = openIndex === index;
+
+        return (
+          <div
+            key={`${scene.title}-${index}`}
+            className="mt-5 rounded-xl border border-white/10 bg-black/20 p-4"
+          >
+            <h4 className="font-bold text-white">
+              🎬 Scene {index + 1} — {scene.title}
+            </h4>
+
+            <p className="mt-3 text-sm leading-6 text-gray-400">
+              {preview}
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setOpenIndex(isOpen ? null : index)
+              }
+              className="mt-4 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-400"
+            >
+              {isOpen ? "Hide Prompt" : "View More"}
+            </button>
+
+            {isOpen && (
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/40 p-4">
+                <p className="whitespace-pre-wrap text-sm leading-7 text-gray-300">
+                  {prompt}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}

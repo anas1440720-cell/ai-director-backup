@@ -1,7 +1,11 @@
-import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+﻿import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import Groq from "groq-sdk";
 
-export type AIProvider = "groq" | "openai" | "gemini" | "claude";
+export type AIProvider =
+  | "groq"
+  | "openai"
+  | "gemini"
+  | "claude";
 
 export type AIProviderConfig = {
   id: AIProvider;
@@ -10,10 +14,26 @@ export type AIProviderConfig = {
 };
 
 export const AI_PROVIDERS: AIProviderConfig[] = [
-  { id: "gemini", name: "Google Gemini", available: true },
-  { id: "groq", name: "Groq Llama / GPT-OSS", available: true },
-  { id: "openai", name: "OpenAI", available: false },
-  { id: "claude", name: "Anthropic Claude", available: false },
+  {
+    id: "gemini",
+    name: "Google Gemini",
+    available: true,
+  },
+  {
+    id: "groq",
+    name: "Groq Llama / GPT-OSS",
+    available: true,
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    available: false,
+  },
+  {
+    id: "claude",
+    name: "Anthropic Claude",
+    available: false,
+  },
 ];
 
 export type GenerateStoryResult = {
@@ -38,19 +58,19 @@ export type DirectorOptions = {
  * SCENE DURATION
  * ============================================================
  *
- * deAPI LTX-Video 13B currently accepts a maximum of 4 seconds
- * per generated clip.
- *
- * Therefore Story Generation must NEVER create a scene longer
- * than 4 seconds.
+ * deAPI LTX-Video 13B accepts a maximum of 4 seconds
+ * per generated video clip.
  *
  * The total requested duration is preserved exactly.
  *
  * Examples:
- * 10s -> 5s + 5s
- * 15s -> 8s + 7s
- * 20s -> 7s + 7s + 6s
+ *
+ * 5s  -> 3s + 2s
+ * 10s -> 4s + 3s + 3s
+ * 15s -> 4s + 4s + 4s + 3s
+ * 20s -> 4s + 4s + 4s + 4s + 4s
  */
+
 export function calculateSceneDurations(
   totalDuration: number
 ): number[] {
@@ -59,7 +79,7 @@ export function calculateSceneDurations(
     Math.round(Number(totalDuration) || 5)
   );
 
-  const MAX_SCENE_DURATION = 8;
+  const MAX_SCENE_DURATION = 4;
 
   const sceneCount = Math.ceil(
     safeDuration / MAX_SCENE_DURATION
@@ -75,11 +95,12 @@ export function calculateSceneDurations(
   return Array.from(
     { length: sceneCount },
     (_, index) =>
-      base + (index < remainder ? 1 : 0)
+      base +
+      (index < remainder ? 1 : 0)
   );
 }
 
-/*
+/**
  * ============================================================
  * GEMINI CLIENT
  * ============================================================
@@ -100,7 +121,7 @@ function getGeminiClient(): GoogleGenAI {
   });
 }
 
-/*
+/**
  * ============================================================
  * GROQ CLIENT
  * ============================================================
@@ -121,7 +142,7 @@ function getGroqClient(): Groq {
   });
 }
 
-/*
+/**
  * ============================================================
  * STORY PROMPT
  * ============================================================
@@ -154,19 +175,19 @@ function buildStoryPrompt(
   return `
 You are an ELITE CINEMATIC FILM DIRECTOR, SCREENWRITER, ACTING DIRECTOR, STORYBOARD DIRECTOR, AND IMAGE-TO-VIDEO MOTION SUPERVISOR.
 
-Your job is to transform the user's idea into a coherent multi-scene cinematic film.
+Your job is to transform the user's idea into a coherent multi-scene cinematic film designed for actual visual execution.
 
-The final production will use:
+The production pipeline is:
 
 STORY
-? IMAGE KEYFRAMES
-? IMAGE-TO-VIDEO
-? ELEVENLABS VOICE
-? SFX
-? MUSIC
-? FINAL EDIT
+→ IMAGE KEYFRAMES
+→ IMAGE-TO-VIDEO
+→ ELEVENLABS VOICE
+→ SFX
+→ MUSIC
+→ FINAL EDIT
 
-The story must therefore be written specifically for cinematic visual execution.
+The story must therefore be designed for short, executable cinematic scenes.
 
 ==================================================
 USER IDEA
@@ -175,7 +196,7 @@ USER IDEA
 ${idea}
 
 ==================================================
-REQUESTED PRODUCTION SETTINGS
+PRODUCTION SETTINGS
 ==================================================
 
 REQUESTED TOTAL DURATION:
@@ -270,19 +291,20 @@ The camera must OBSERVE AN EVENT.
 The character must PERFORM AN EVENT.
 
 ==================================================
-MANDATORY EVENT LOGIC
+MANDATORY EVENT STRUCTURE
 ==================================================
 
-Every scene MUST contain this complete chain:
+Every scene MUST contain:
 
 CAUSE
-? ACTION
-? INTERACTION
-? REACTION
-? CONSEQUENCE
-? TRANSITION
+→ TRIGGER
+→ PHYSICAL ACTION
+→ INTERACTION
+→ REACTION
+→ CONSEQUENCE
+→ TRANSITION
 
-The action must be physically understandable.
+The event must be physically understandable.
 
 The viewer must be able to understand:
 
@@ -299,7 +321,7 @@ The viewer must be able to understand:
 SCENE ACTING REQUIREMENTS
 ==================================================
 
-Characters should perform meaningful actions such as:
+Characters should perform meaningful physical actions such as:
 
 - walking with purpose
 - running when appropriate
@@ -317,7 +339,7 @@ Characters should perform meaningful actions such as:
 - picking up
 - dropping
 - pointing
-- stepping back
+- stepping backward
 - stepping forward
 - approaching
 - retreating
@@ -326,11 +348,8 @@ Characters should perform meaningful actions such as:
 - exchanging meaningful glances
 - reacting to unexpected events
 - manipulating objects
-- interacting with walls
-- interacting with doors
-- interacting with streets
-- interacting with furniture
-- interacting with magical objects
+- touching surfaces
+- moving around obstacles
 - responding to environmental changes
 
 Every movement MUST have a narrative reason.
@@ -339,7 +358,7 @@ Every movement MUST have a narrative reason.
 PHYSICAL ACTING
 ==================================================
 
-Describe actions as physical performances.
+Describe emotions through visible physical performance.
 
 Bad:
 
@@ -347,7 +366,7 @@ Bad:
 
 Good:
 
-"Character notices the glowing object, freezes for a brief moment, widens their eyes, leans backward, takes one cautious step away, then looks toward the other child."
+"Character notices the glowing object, stops mid-step, widens their eyes, leans backward, raises one hand defensively, then looks toward the other child for confirmation."
 
 Emotion must be visible through:
 
@@ -359,6 +378,8 @@ Emotion must be visible through:
 - hand movement
 - movement through space
 - reaction timing
+
+Avoid abstract emotional descriptions without physical acting.
 
 ==================================================
 ANTI-CHARACTER-SHOWCASE RULE
@@ -393,7 +414,7 @@ Use 1 or 2 main characters.
 
 Do not unnecessarily create many characters.
 
-If the story can work with two children, use two children.
+If the story works naturally with two children, prefer two children.
 
 If one character is sufficient, use one.
 
@@ -446,17 +467,18 @@ SCENE CHARACTER CONTINUITY
 
 Every scene MUST contain a "characters" array.
 
-Each scene character entry MUST repeat:
+Every scene character entry MUST repeat:
 
 - character identity
 - exact appearance
+- exact clothing
 - current action
 - current emotion
 - current position in frame
 
-The scene character data is used directly by the video prompt system.
+Do NOT omit these details.
 
-Do NOT omit it.
+The scene character data is used by downstream image and video prompt generation.
 
 ==================================================
 ENVIRONMENT CONTINUITY
@@ -479,13 +501,13 @@ The environment must remain logically consistent between scenes unless the story
 
 Characters must physically exist inside the environment.
 
-They must not look pasted onto the background.
+They must not appear pasted onto the background.
 
 ==================================================
 ENVIRONMENT INTERACTION
 ==================================================
 
-When appropriate, characters should:
+When appropriate, characters should physically:
 
 - touch walls
 - open doors
@@ -517,7 +539,7 @@ The visual description MUST include:
 
 - exact character identity
 - exact clothing
-- current action
+- current physical action
 - current pose
 - current interaction
 - environment
@@ -537,7 +559,7 @@ The visual description MUST include:
 
 The source image will later become the first frame of image-to-video generation.
 
-Therefore the image must visually represent the event.
+Therefore the image must visually represent the event itself.
 
 ==================================================
 VIDEO MOTION COMPATIBILITY
@@ -545,20 +567,20 @@ VIDEO MOTION COMPATIBILITY
 
 Every scene must be executable as a short image-to-video shot.
 
-Avoid actions that require too many unrelated events.
+Avoid too many unrelated events.
 
-A single scene should contain ONE coherent event with several connected acting beats.
+A single scene should contain ONE coherent event with connected acting beats.
 
-For example:
+Example:
 
 Child walks toward glowing object
-? notices it floating
-? slows down
-? reaches toward it
-? object reacts
-? child pulls hand back
-? second child approaches
-? both stare at the changed object.
+→ notices it floating
+→ slows down
+→ reaches toward it
+→ object reacts
+→ child pulls hand back
+→ second child approaches
+→ both react to the changed object.
 
 This is GOOD.
 
@@ -584,7 +606,7 @@ What does the character physically do?
 
 BEAT 4 — INTERACTION
 
-What object, character, or environment is touched or affected?
+What object, character, or environment is affected?
 
 BEAT 5 — REACTION
 
@@ -598,7 +620,7 @@ BEAT 7 — TRANSITION
 
 What final visual state naturally leads into the next scene?
 
-The final "action" field MUST combine all seven beats into one concise chronological physical performance.
+The final "action" field MUST combine the seven beats into one concise chronological physical performance.
 
 ==================================================
 CAMERA
@@ -608,7 +630,7 @@ The camera must observe the event.
 
 Camera movement is SECONDARY to acting.
 
-Use:
+Use only purposeful camera movement such as:
 
 - tracking
 - lateral tracking
@@ -622,7 +644,7 @@ Use:
 - crane
 - controlled handheld follow
 
-Only use camera movement when it helps communicate the event.
+Camera movement must support the event.
 
 Never use camera movement to hide weak acting.
 
@@ -632,7 +654,7 @@ VOICE
 
 Dialogue is optional.
 
-Do NOT create dialogue just to fill silence.
+Do NOT create dialogue merely to fill silence.
 
 If dialogue is unnecessary:
 
@@ -648,15 +670,15 @@ If dialogue exists, it MUST:
 - be natural
 - be written entirely in ${outputLanguage}
 
-Do NOT write narration unless the story genuinely requires narration.
+Do NOT write narration unless genuinely required.
 
 ==================================================
 AUDIO ARCHITECTURE
 ==================================================
 
-The image-to-video provider MUST remain visual-only.
+The image-to-video provider is VISUAL ONLY.
 
-The generated video must NOT contain:
+The video generation prompt MUST NOT request:
 
 - speech
 - dialogue
@@ -665,8 +687,11 @@ The generated video must NOT contain:
 - singing
 - lyrics
 - sound effects
+- audio generation
 
-Dialogue belongs to the external ElevenLabs voice pipeline.
+The video provider must produce silent visual footage.
+
+Dialogue belongs to ElevenLabs.
 
 SFX belongs to the SFX pipeline.
 
@@ -674,13 +699,13 @@ Music belongs to the music pipeline.
 
 Therefore:
 
-"dialogue" describes only intended dialogue.
+"dialogue" describes only intended spoken dialogue.
 
 "sfxPrompt" describes only sounds caused by visible actions.
 
 "musicMood" describes only emotional background music.
 
-Do NOT put spoken dialogue inside:
+Never place spoken dialogue inside:
 
 - musicMood
 - sfxPrompt
@@ -705,7 +730,7 @@ Examples:
 - footsteps approaching
 - glass breaking
 
-Do not create generic SFX unrelated to visible action.
+Do not create generic SFX unrelated to visible actions.
 
 ==================================================
 MUSIC
@@ -752,7 +777,7 @@ Selected Visual Style:
 
 ${options.style || "Realistic"}
 
-Every visual description MUST respect the selected style.
+Every visual description MUST respect this style.
 
 Do NOT:
 
@@ -765,18 +790,6 @@ Do NOT:
 - add unrelated visual aesthetics
 
 The visual style must remain consistent across every scene.
-
-==================================================
-LANGUAGE
-==================================================
-
-All natural-language content must be:
-
-${outputLanguage}
-
-Do not write English descriptions when Arabic is requested.
-
-Do not write Arabic descriptions when English is requested.
 
 ==================================================
 SCENE DURATION
@@ -897,7 +910,7 @@ Schema:
 }
 
 ==================================================
-FINAL QUALITY CHECK BEFORE RETURNING JSON
+FINAL QUALITY CHECK
 ==================================================
 
 Before returning the JSON, internally verify:
@@ -906,9 +919,9 @@ Before returning the JSON, internally verify:
 2. Scene count exactly equals ${sceneCount}.
 3. Every scene duration matches the schedule.
 4. No scene exceeds 4 seconds.
-5. Every scene contains a real event.
-6. Every scene has cause ? action ? interaction ? reaction ? consequence.
-7. Every scene contains purposeful movement.
+5. Every scene is a real story event.
+6. Every scene has cause → trigger → action → interaction → reaction → consequence.
+7. Every scene has purposeful movement.
 8. Every scene contains scene.characters.
 9. Every scene contains location.
 10. Every scene contains environment.
@@ -923,16 +936,19 @@ Before returning the JSON, internally verify:
 19. Visual keyframes show events, not portraits.
 20. Dialogue is relevant and optional.
 21. SFX describe visible actions only.
-22. MusicMood contains no dialogue.
-23. No audio is requested from the image-to-video provider.
-24. No text, subtitles or watermark are requested.
-25. All natural-language content uses ${outputLanguage}.
+22. musicMood contains no dialogue.
+23. Image-to-video receives visual instructions only.
+24. No speech, music, narration or SFX is requested from the video provider.
+25. No text, subtitles or watermark are requested.
+26. All natural-language content uses ${outputLanguage}.
+27. Every scene is executable within its exact duration.
+28. Do not create multiple unrelated actions inside one short clip.
 
 Return the final JSON only.
 `.trim();
 }
 
-/*
+/**
  * ============================================================
  * GROQ STORY GENERATION
  * ============================================================
@@ -1008,7 +1024,7 @@ async function generateWithGroq(
   }
 }
 
-/*
+/**
  * ============================================================
  * GEMINI STORY GENERATION
  * ============================================================
@@ -1020,13 +1036,16 @@ async function generateWithGemini(
   options: DirectorOptions
 ): Promise<GenerateStoryResult> {
   /*
-   * Updated official Google Gemini model names.
+   * Keep the model list conservative.
+   *
+   * Do not blindly cycle through multiple models when a
+   * quota/rate-limit error occurs. That can waste quota and
+   * make one failed request turn into several failed requests.
    */
 
   const fallbackModels = [
-    "gemini-3.5-flash", "gemini-3.6-flash",
-    "gemini-3.5-flash-lite",
-  ];
+  "gemini-3.6-flash",
+];
 
   const prompt =
     buildStoryPrompt(
@@ -1040,30 +1059,37 @@ async function generateWithGemini(
   const gemini =
     getGeminiClient();
 
-  // Safety settings to prevent empty responses on mystery/thriller stories
   const safetySettings = [
     {
-      category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-      threshold: HarmBlockThreshold.BLOCK_NONE,
+      category:
+        HarmCategory.HARM_CATEGORY_HARASSMENT,
+      threshold:
+        HarmBlockThreshold.BLOCK_NONE,
     },
     {
-      category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-      threshold: HarmBlockThreshold.BLOCK_NONE,
+      category:
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+      threshold:
+        HarmBlockThreshold.BLOCK_NONE,
     },
     {
-      category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-      threshold: HarmBlockThreshold.BLOCK_NONE,
+      category:
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+      threshold:
+        HarmBlockThreshold.BLOCK_NONE,
     },
     {
-      category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-      threshold: HarmBlockThreshold.BLOCK_NONE,
+      category:
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+      threshold:
+        HarmBlockThreshold.BLOCK_NONE,
     },
   ];
 
   for (const modelName of fallbackModels) {
     try {
       console.log(
-        `?? Gemini story generation using model: ${modelName}`
+        `Gemini story generation using model: ${modelName}`
       );
 
       const response =
@@ -1073,12 +1099,251 @@ async function generateWithGemini(
           contents: prompt,
 
           config: {
-            responseMimeType:
-              "application/json",
+  responseMimeType: "application/json",
 
-            temperature: 0.7,
-            safetySettings: safetySettings as any,
+  responseSchema: {
+    type: "OBJECT",
+    properties: {
+      hook: {
+        type: "STRING",
+      },
+
+      characters: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            characterId: {
+              type: "STRING",
+            },
+            name: {
+              type: "STRING",
+            },
+            gender: {
+              type: "STRING",
+            },
+            voiceType: {
+              type: "STRING",
+            },
+            age: {
+              type: "STRING",
+            },
+            appearance: {
+              type: "STRING",
+            },
+            clothing: {
+              type: "STRING",
+            },
+            visualIdentity: {
+              type: "STRING",
+            },
           },
+          required: [
+            "characterId",
+            "name",
+            "gender",
+            "voiceType",
+            "age",
+            "appearance",
+            "clothing",
+            "visualIdentity",
+          ],
+        },
+      },
+
+      scenes: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            title: {
+              type: "STRING",
+            },
+
+            duration: {
+              type: "NUMBER",
+            },
+
+            storyPurpose: {
+              type: "STRING",
+            },
+
+            sceneObjective: {
+              type: "STRING",
+            },
+
+            action: {
+              type: "STRING",
+            },
+
+            interaction: {
+              type: "STRING",
+            },
+
+            reaction: {
+              type: "STRING",
+            },
+
+            movement: {
+              type: "STRING",
+            },
+
+            emotion: {
+              type: "STRING",
+            },
+
+            environmentInteraction: {
+              type: "STRING",
+            },
+
+            continuity: {
+              type: "STRING",
+            },
+
+            location: {
+              type: "STRING",
+            },
+
+            environment: {
+              type: "OBJECT",
+              properties: {
+                description: {
+                  type: "STRING",
+                },
+                objects: {
+                  type: "STRING",
+                },
+                lighting: {
+                  type: "STRING",
+                },
+                timeOfDay: {
+                  type: "STRING",
+                },
+              },
+              required: [
+                "description",
+                "objects",
+                "lighting",
+                "timeOfDay",
+              ],
+            },
+
+            characters: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  characterId: {
+                    type: "STRING",
+                  },
+                  name: {
+                    type: "STRING",
+                  },
+                  appearance: {
+                    type: "STRING",
+                  },
+                  clothing: {
+                    type: "STRING",
+                  },
+                  action: {
+                    type: "STRING",
+                  },
+                  emotion: {
+                    type: "STRING",
+                  },
+                  positionInFrame: {
+                    type: "STRING",
+                  },
+                },
+                required: [
+                  "characterId",
+                  "name",
+                  "appearance",
+                  "clothing",
+                  "action",
+                  "emotion",
+                  "positionInFrame",
+                ],
+              },
+            },
+
+            sfxPrompt: {
+              type: "STRING",
+            },
+
+            musicMood: {
+              type: "STRING",
+            },
+
+            visual: {
+              type: "STRING",
+            },
+
+            camera: {
+              type: "STRING",
+            },
+
+            dialogue: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  speakerName: {
+                    type: "STRING",
+                  },
+                  characterType: {
+                    type: "STRING",
+                  },
+                  line: {
+                    type: "STRING",
+                  },
+                },
+                required: [
+                  "speakerName",
+                  "characterType",
+                  "line",
+                ],
+              },
+            },
+          },
+
+          required: [
+            "title",
+            "duration",
+            "storyPurpose",
+            "sceneObjective",
+            "action",
+            "interaction",
+            "reaction",
+            "movement",
+            "emotion",
+            "environmentInteraction",
+            "continuity",
+            "location",
+            "environment",
+            "characters",
+            "sfxPrompt",
+            "musicMood",
+            "visual",
+            "camera",
+            "dialogue",
+          ],
+        },
+      },
+    },
+
+    required: [
+      "hook",
+      "characters",
+      "scenes",
+    ],
+  },
+
+  temperature: 0.7,
+
+  safetySettings:
+    safetySettings as any,
+},
         });
 
       let text = "";
@@ -1114,7 +1379,7 @@ async function generateWithGemini(
         text.trim()
       ) {
         console.log(
-          `? Gemini story generation succeeded with ${modelName}`
+          `Gemini story generation succeeded with ${modelName}`
         );
 
         return {
@@ -1131,12 +1396,54 @@ async function generateWithGemini(
     } catch (error) {
       lastError = error;
 
-      console.warn(
-        `?? Gemini model ${modelName} failed:`,
+      const message =
         error instanceof Error
           ? error.message
-          : error
+          : String(error);
+
+      console.warn(
+        `Gemini model ${modelName} failed:`,
+        message
       );
+
+      /*
+       * IMPORTANT QUOTA PROTECTION:
+       *
+       * If Gemini reports a rate-limit/quota/exhaustion
+       * condition, stop trying additional Gemini models.
+       *
+       * Switching models inside the same exhausted project
+       * is not a reliable quota recovery strategy and can
+       * create unnecessary API requests.
+       */
+      const lowerMessage =
+        message.toLowerCase();
+
+      const isQuotaError =
+        lowerMessage.includes("429") ||
+        lowerMessage.includes(
+          "resource_exhausted"
+        ) ||
+        lowerMessage.includes(
+          "resource exhausted"
+        ) ||
+        lowerMessage.includes(
+          "rate limit"
+        ) ||
+        lowerMessage.includes(
+          "quota"
+        ) ||
+        lowerMessage.includes(
+          "too many requests"
+        );
+
+      if (isQuotaError) {
+        console.warn(
+          "Gemini quota/rate-limit detected. Stopping Gemini fallback attempts."
+        );
+
+        break;
+      }
     }
   }
 
@@ -1145,15 +1452,20 @@ async function generateWithGemini(
    * GROQ FALLBACK
    * ==========================================================
    *
-   * Only use Groq when Gemini completely fails and
-   * GROQ_API_KEY exists.
+   * Only use Groq if:
+   *
+   * 1. Gemini failed completely.
+   * 2. GROQ_API_KEY exists.
+   *
+   * This keeps Groq as a controlled fallback rather than
+   * sending duplicate Gemini requests.
    */
 
   if (
     process.env.GROQ_API_KEY
   ) {
     console.warn(
-      "?? Gemini failed on all configured models. Falling back to Groq."
+      "Gemini failed. Falling back to Groq."
     );
 
     return generateWithGroq(
@@ -1164,7 +1476,7 @@ async function generateWithGemini(
   }
 
   console.error(
-    "? Gemini generation failed completely:",
+    "Gemini generation failed completely:",
     lastError
   );
 
@@ -1179,7 +1491,7 @@ async function generateWithGemini(
   };
 }
 
-/*
+/**
  * ============================================================
  * PUBLIC STORY GENERATOR
  * ============================================================
@@ -1202,10 +1514,10 @@ export async function generateStory(
   }
 
   /*
-   * OpenAI and Claude are not enabled yet.
+   * OpenAI and Claude are not enabled.
+   *
    * Gemini remains the default provider.
    */
-
   return generateWithGemini(
     idea,
     duration,

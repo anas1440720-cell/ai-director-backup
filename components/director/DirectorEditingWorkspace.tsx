@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useRef } from "react";
 
@@ -69,7 +69,12 @@ export default function DirectorEditingWorkspace({
   }, []);
 
   const videoCount = generatedVideos.filter(Boolean).length;
+const voiceCount = generatedVoiceAudios.filter(Boolean).length;
+const expectedSceneCount = scenes.length;
 
+const allVoicesReady =
+  expectedSceneCount === 0 ||
+  voiceCount === expectedSceneCount;
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
@@ -124,8 +129,25 @@ const saveToArchive = async (blob: Blob) => {
   const renderFinalVideo = async () => {
     setIsRenderingFinalVideo(true);
     setRenderError(null);
+if (!allVoicesReady) {
+  const message =
+    `Voice assets are not ready: ${voiceCount}/${expectedSceneCount} scenes have voice audio.`;
 
+  console.error(`❌ ${message}`);
+  setRenderError(message);
+  setIsRenderingFinalVideo(false);
+  return;
+}
     try {
+      console.log("🎙️ FINAL RENDER VOICE CHECK:", {
+  expectedScenes: scenes.length,
+  voiceCount: generatedVoiceAudios.filter(Boolean).length,
+  voices: generatedVoiceAudios.map((audio, index) => ({
+    scene: index + 1,
+    ready: Boolean(audio),
+    type: audio ? audio.slice(0, 30) : null,
+  })),
+});
       console.log("🚀 Sending assets to /api/render-video...");
       
       const response = await fetch("/api/render-video", {

@@ -56,6 +56,7 @@ export default function ProductionGeneratorEngine({
   const finishedPlanRef = useRef<string | null>(null);
   const failedPlanRef = useRef<string | null>(null);
   const generationTokenRef = useRef(0);
+  const activePlanRef = useRef<string | null>(null);
 
   // Parent callbacks are recreated on every AIDirector render.
   // Keep the latest callbacks in refs so a parent state update NEVER
@@ -145,6 +146,7 @@ export default function ProductionGeneratorEngine({
     let cancelled = false;
 
     runningRef.current = true;
+    activePlanRef.current = planKey;
     setRunning(true);
     setError("");
 
@@ -339,29 +341,31 @@ export default function ProductionGeneratorEngine({
         if (!isCancelled()) {
           runningRef.current = false;
           setRunning(false);
+          activePlanRef.current = null;
         }
       }
     };
 
     void run();
 
+    // IMPORTANT:
+    // React StrictMode and normal parent rerenders can run effect cleanup
+    // while the same production plan is still in flight. Never cancel the
+    // active request in that case, otherwise the next effect starts Scene 1
+    // again and submits the same deAPI job twice.
     return () => {
-      cancelled = true;
-      if (generationTokenRef.current === token) {
-        generationTokenRef.current += 1;
+      if (activePlanRef.current !== planKey) return;
+
+      // If the same plan is being cleaned up/re-mounted, leave the running
+      // job untouched. A genuinely new plan will have a different planKey
+      // and its previous effect will be cancelled by the next effect setup.
+      if (finishedPlanRef.current === planKey || failedPlanRef.current === planKey) {
         runningRef.current = false;
+        activePlanRef.current = null;
+        return;
       }
     };
-  }, [
-    planKey,
-    planValid,
-    scenesCount,
-    requestedDuration,
-    durations,
-    imagePrompts,
-    videoPrompts,
-    voiceScripts,
-  ]);
+  }, [planKey, planValid]);
 
   const requiredVoices = voiceScripts.filter(
     (script) => script?.trim()

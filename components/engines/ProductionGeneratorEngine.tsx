@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface ProductionGeneratorProps {
   idea?: string;
@@ -31,19 +31,6 @@ function getError(result: any, fallback: string) {
   return String(result?.message || result?.error || fallback);
 }
 
-function hardFailure(status: number, message: string) {
-  const text = message.toLowerCase();
-  return (
-    status === 429 ||
-    status === 403 ||
-    text.includes("too many attempts") ||
-    text.includes("rate limit") ||
-    text.includes("quota") ||
-    text.includes("concurrency") ||
-    text.includes("suspended")
-  );
-}
-
 export default function ProductionGeneratorEngine({
   duration = 30,
   sceneDurations = [],
@@ -68,69 +55,126 @@ export default function ProductionGeneratorEngine({
   const runningRef = useRef(false);
   const finishedPlanRef = useRef<string | null>(null);
   const failedPlanRef = useRef<string | null>(null);
+  const generationTokenRef = useRef(0);
+
+  // Parent callbacks are recreated on every AIDirector render.
+  // Keep the latest callbacks in refs so a parent state update NEVER
+  // cancels an in-flight production job.
+  const onImageGeneratedRef = useRef(onImageGenerated);
+  const onVideoGeneratedRef = useRef(onVideoGenerated);
+  const onVoiceGeneratedRef = useRef(onVoiceGenerated);
+  const onGenerationErrorRef = useRef(onGenerationError);
+
+  useEffect(() => {
+    onImageGeneratedRef.current = onImageGenerated;
+    onVideoGeneratedRef.current = onVideoGenerated;
+    onVoiceGeneratedRef.current = onVoiceGenerated;
+    onGenerationErrorRef.current = onGenerationError;
+  });
+
+  // Keep the latest generated assets available to the long-running job.
+  const assetsRef = useRef({
+    images: generatedImages,
+    videos: generatedVideos,
+    voices: generatedVoiceAudios,
+  });
+
+  useEffect(() => {
+    assetsRef.current = {
+      images: generatedImages,
+      videos: generatedVideos,
+      voices: generatedVoiceAudios,
+    };
+  }, [generatedImages, generatedVideos, generatedVoiceAudios]);
 
   const requestedDuration = Math.round(Number(duration) || 0);
-  const durations = sceneDurations.map(Number);
+  const durations = useMemo(
+    () => sceneDurations.map(Number),
+    [sceneDurations]
+  );
   const scenesCount = durations.length;
   const expectedSceneCount = requestedDuration > 0
     ? Math.ceil(requestedDuration / MAX_SCENE_DURATION)
     : 0;
 
-  const planKey = `${requestedDuration}:${durations.join(",")}:${imagePrompts.length}:${videoPrompts.length}:${voiceScripts.length}`;
+  const planKey = useMemo(
+    () => JSON.stringify({
+      requestedDuration,
+      durations,
+      imagePrompts,
+      videoPrompts,
+      voiceScripts,
+    }),
+    [requestedDuration, durations, imagePrompts, videoPrompts, voiceScripts]
+  );
 
   const planValid =
     requestedDuration >= 5 &&
     scenesCount === expectedSceneCount &&
-    durations.every((d) => Number.isInteger(d) && d >= 1 && d <= MAX_SCENE_DURATION) &&
-    durations.reduce((a, b) => a + b, 0) === requestedDuration &&
+    durations.every(
+      (value) =>
+        Number.isInteger(value) &&
+        value >= 1 &&
+        value <= MAX_SCENE_DURATION
+    ) &&
+    durations.reduce((sum, value) => sum + value, 0) === requestedDuration &&
     imagePrompts.length === scenesCount &&
     videoPrompts.length === scenesCount &&
     voiceScripts.length === scenesCount;
 
   useEffect(() => {
-    if (finishedPlanRef.current !== planKey && failedPlanRef.current !== planKey) {
-      runningRef.current = false;
-      setRunning(false);
+    if (
+      finishedPlanRef.current !== planKey &&
+      failedPlanRef.current !== planKey
+    ) {
+      setError("");
       setCurrentScene(0);
       setImageCount(generatedImages.filter(Boolean).length);
       setVideoCount(generatedVideos.filter(Boolean).length);
       setVoiceCount(generatedVoiceAudios.filter(Boolean).length);
-      setError("");
     }
   }, [planKey]);
 
   useEffect(() => {
     if (!planValid || scenesCount === 0) return;
-    if (runningRef.current) return;
     if (finishedPlanRef.current === planKey) return;
     if (failedPlanRef.current === planKey) return;
+    if (runningRef.current) return;
+
+    const token = ++generationTokenRef.current;
+    let cancelled = false;
 
     runningRef.current = true;
     setRunning(true);
+    setError("");
 
-    let cancelled = false;
+    const isCancelled = () =>
+      cancelled || generationTokenRef.current !== token;
 
     const fail = (message: string) => {
-      if (cancelled) return;
+      if (isCancelled()) return;
       failedPlanRef.current = planKey;
       setError(message);
-      onGenerationError?.(message);
+      onGenerationErrorRef.current?.(message);
     };
 
     const run = async () => {
       try {
         for (let index = 0; index < scenesCount; index++) {
-          if (cancelled) return;
+          if (isCancelled()) return;
+
           setCurrentScene(index + 1);
 
           // ==================================================
-          // 1. SOURCE IMAGE — reuse existing asset first.
+          // 1. IMAGE — reuse the exact existing asset first.
           // ==================================================
-          let imageUrl = generatedImages[index] || "";
+          let imageUrl = assetsRef.current.images[index] || "";
 
           if (!imageUrl) {
             const prompt = imagePrompts[index]?.trim();
-            if (!prompt) throw new Error(`Scene ${index + 1}: image prompt is empty.`);
+            if (!prompt) {
+              throw new Error(`Scene ${index + 1}: image prompt is empty.`);
+            }
 
             console.log(`🖼️ Scene ${index + 1}/${scenesCount}: Cloudflare image`);
 
@@ -145,29 +189,42 @@ export default function ProductionGeneratorEngine({
 
             const result = await response.json();
             if (!response.ok || !result.success) {
-              throw new Error(getError(result, `Image generation failed for Scene ${index + 1}.`));
+              throw new Error(
+                getError(result, `Image generation failed for Scene ${index + 1}.`)
+              );
             }
 
             imageUrl = result.imageUrl || result.image || "";
-            if (!imageUrl) throw new Error(`Scene ${index + 1}: Cloudflare returned no image.`);
-            onImageGenerated?.(index, imageUrl);
+            if (!imageUrl) {
+              throw new Error(`Scene ${index + 1}: Cloudflare returned no image.`);
+            }
+
+            assetsRef.current.images[index] = imageUrl;
+            onImageGeneratedRef.current?.(index, imageUrl);
           } else {
             console.log(`♻️ Scene ${index + 1}: existing image reused.`);
           }
 
-          setImageCount(index + 1);
+          setImageCount((current) => Math.max(current, index + 1));
+
+          if (isCancelled()) return;
 
           // ==================================================
-          // 2. SILENT VIDEO — MUST use the exact image above.
+          // 2. SILENT deAPI VIDEO — exact image + exact duration.
           // ==================================================
-          let videoUrl = generatedVideos[index] || "";
+          let videoUrl = assetsRef.current.videos[index] || "";
 
           if (!videoUrl) {
             const sceneDuration = durations[index];
             const prompt = videoPrompts[index]?.trim();
-            if (!prompt) throw new Error(`Scene ${index + 1}: video prompt is empty.`);
 
-            console.log(`🎥 Scene ${index + 1}/${scenesCount}: deAPI silent video ${sceneDuration}s`);
+            if (!prompt) {
+              throw new Error(`Scene ${index + 1}: video prompt is empty.`);
+            }
+
+            console.log(
+              `🎥 Scene ${index + 1}/${scenesCount}: deAPI silent video ${sceneDuration}s`
+            );
 
             const response = await fetch("/api/generate-video", {
               method: "POST",
@@ -187,71 +244,99 @@ export default function ProductionGeneratorEngine({
             });
 
             const result = await response.json();
-            const message = getError(result, `Video generation failed for Scene ${index + 1}.`);
+            const message = getError(
+              result,
+              `Video generation failed for Scene ${index + 1}.`
+            );
 
             if (!response.ok || !result.success) {
               throw new Error(message);
             }
 
             videoUrl = result.videoUrl || result.videoUri || "";
-            if (!videoUrl) throw new Error(`Scene ${index + 1}: deAPI returned no video URL.`);
+            if (!videoUrl) {
+              throw new Error(`Scene ${index + 1}: deAPI returned no video URL.`);
+            }
 
             if (result.effectiveDuration != null) {
               const effective = Number(result.effectiveDuration);
               if (!Number.isFinite(effective) || effective !== sceneDuration) {
-                throw new Error(`Scene ${index + 1}: duration mismatch. Planned ${sceneDuration}s, received ${result.effectiveDuration}s.`);
+                throw new Error(
+                  `Scene ${index + 1}: duration mismatch. Planned ${sceneDuration}s, received ${result.effectiveDuration}s.`
+                );
               }
             }
 
-            onVideoGenerated?.(index, videoUrl);
+            assetsRef.current.videos[index] = videoUrl;
+            onVideoGeneratedRef.current?.(index, videoUrl);
           } else {
             console.log(`♻️ Scene ${index + 1}: existing video reused.`);
           }
 
-          setVideoCount(index + 1);
+          setVideoCount((current) => Math.max(current, index + 1));
+
+          if (isCancelled()) return;
 
           // ==================================================
-          // 3. VOICE — only when the scene actually has text.
+          // 3. ELEVENLABS VOICE — only when dialogue exists.
           // ==================================================
           const script = voiceScripts[index]?.trim() || "";
 
-          if (script && !generatedVoiceAudios[index]) {
-            console.log(`🎙️ Scene ${index + 1}/${scenesCount}: ElevenLabs voice`);
+          if (script) {
+            let audioUrl = assetsRef.current.voices[index] || "";
 
-            const response = await fetch("/api/generate-voice", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                text: script,
-                language: /[\u0600-\u06FF]/.test(script) ? "ar" : "en",
-              }),
-            });
+            if (!audioUrl) {
+              console.log(
+                `🎙️ Scene ${index + 1}/${scenesCount}: ElevenLabs voice`
+              );
 
-            const result = await response.json();
-            if (!response.ok || !result.success) {
-              throw new Error(getError(result, `Voice generation failed for Scene ${index + 1}.`));
+              const response = await fetch("/api/generate-voice", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  text: script,
+                  language: /[\u0600-\u06FF]/.test(script) ? "ar" : "en",
+                }),
+              });
+
+              const result = await response.json();
+              if (!response.ok || !result.success) {
+                throw new Error(
+                  getError(result, `Voice generation failed for Scene ${index + 1}.`)
+                );
+              }
+
+              audioUrl = result.audioUrl || result.audio || "";
+              if (!audioUrl) {
+                throw new Error(`Scene ${index + 1}: ElevenLabs returned no audio.`);
+              }
+
+              assetsRef.current.voices[index] = audioUrl;
+              onVoiceGeneratedRef.current?.(index, audioUrl);
+            } else {
+              console.log(`♻️ Scene ${index + 1}: existing voice reused.`);
             }
-
-            const audioUrl = result.audioUrl || result.audio || "";
-            if (!audioUrl) throw new Error(`Scene ${index + 1}: ElevenLabs returned no audio.`);
-            onVoiceGenerated?.(index, audioUrl);
-            setVoiceCount((current) => current + 1);
-          } else if (script) {
-            setVoiceCount((current) => current + 1);
           }
+
+          setVoiceCount(
+            assetsRef.current.voices.filter(Boolean).length
+          );
         }
 
-        if (!cancelled) {
+        if (!isCancelled()) {
           finishedPlanRef.current = planKey;
-          console.log("✅ ONE-CLICK PRODUCTION COMPLETE: all scene assets are ready.");
+          console.log(
+            "✅ ONE-CLICK PRODUCTION COMPLETE: all visual clips and required voice tracks are ready."
+          );
         }
       } catch (caught) {
-        if (!cancelled) {
-          const message = caught instanceof Error ? caught.message : String(caught);
+        if (!isCancelled()) {
+          const message =
+            caught instanceof Error ? caught.message : String(caught);
           fail(message);
         }
       } finally {
-        if (!cancelled) {
+        if (!isCancelled()) {
           runningRef.current = false;
           setRunning(false);
         }
@@ -262,27 +347,25 @@ export default function ProductionGeneratorEngine({
 
     return () => {
       cancelled = true;
-      runningRef.current = false;
+      if (generationTokenRef.current === token) {
+        generationTokenRef.current += 1;
+        runningRef.current = false;
+      }
     };
   }, [
     planKey,
     planValid,
     scenesCount,
     requestedDuration,
-    durations.join(","),
-    imagePrompts.join("\u0001"),
-    videoPrompts.join("\u0001"),
-    voiceScripts.join("\u0001"),
-    generatedImages.join("\u0001"),
-    generatedVideos.join("\u0001"),
-    generatedVoiceAudios.join("\u0001"),
-    onImageGenerated,
-    onVideoGenerated,
-    onVoiceGenerated,
-    onGenerationError,
+    durations,
+    imagePrompts,
+    videoPrompts,
+    voiceScripts,
   ]);
 
-  const requiredVoices = voiceScripts.filter((script) => script?.trim()).length;
+  const requiredVoices = voiceScripts.filter(
+    (script) => script?.trim()
+  ).length;
   const readyImages = Math.min(imageCount, scenesCount);
   const readyVideos = Math.min(videoCount, scenesCount);
   const readyVoices = Math.min(voiceCount, requiredVoices);
@@ -291,11 +374,19 @@ export default function ProductionGeneratorEngine({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div>
-          <h3 className="text-base font-bold text-white">🎬 One-Click Production Engine</h3>
-          <p className="text-xs text-gray-400">Story → images → silent deAPI video → ElevenLabs voice.</p>
+          <h3 className="text-base font-bold text-white">
+            🎬 One-Click Production Engine
+          </h3>
+          <p className="text-xs text-gray-400">
+            Story → images → silent deAPI video → ElevenLabs voice.
+          </p>
         </div>
         <div className="text-xs font-mono text-cyan-400">
-          {running ? `Scene ${currentScene}/${scenesCount}` : finishedPlanRef.current === planKey ? "100% complete" : "Ready"}
+          {running
+            ? `Scene ${currentScene}/${scenesCount}`
+            : finishedPlanRef.current === planKey
+              ? "100% complete"
+              : "Ready"}
         </div>
       </div>
 
@@ -306,26 +397,49 @@ export default function ProductionGeneratorEngine({
       )}
 
       {error && (
-        <div className="rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-xs text-red-300">❌ {error}</div>
+        <div className="rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-xs text-red-300">
+          ❌ {error}
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center text-xs text-gray-300">🖼️ Images: {readyImages}/{scenesCount}</div>
-        <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center text-xs text-gray-300">🎥 Videos: {readyVideos}/{scenesCount}</div>
-        <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center text-xs text-gray-300">🎙️ Voice: {readyVoices}/{requiredVoices}</div>
+        <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center text-xs text-gray-300">
+          🖼️ Images: {readyImages}/{scenesCount}
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center text-xs text-gray-300">
+          🎥 Videos: {readyVideos}/{scenesCount}
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center text-xs text-gray-300">
+          🎙️ Voice: {readyVoices}/{requiredVoices}
+        </div>
       </div>
 
       <div className="space-y-2">
         {durations.map((sceneDuration, index) => (
-          <div key={index} className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-gray-300">
+          <div
+            key={index}
+            className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-gray-300"
+          >
             <div className="flex items-center justify-between">
-              <span className="font-bold text-cyan-300">Scene {index + 1}</span>
-              <span className="font-mono text-gray-500">{sceneDuration}s</span>
+              <span className="font-bold text-cyan-300">
+                Scene {index + 1}
+              </span>
+              <span className="font-mono text-gray-500">
+                {sceneDuration}s
+              </span>
             </div>
             <div className="mt-2 flex flex-wrap gap-3">
-              <span className={index < readyImages ? "text-emerald-300" : "text-gray-500"}>{index < readyImages ? "✅" : "⏳"} Image</span>
-              <span className={index < readyVideos ? "text-emerald-300" : "text-gray-500"}>{index < readyVideos ? "✅" : "⏳"} Silent Video</span>
-              {voiceScripts[index]?.trim() && <span className={(generatedVoiceAudios[index] || index < readyVoices) ? "text-emerald-300" : "text-gray-500"}>{generatedVoiceAudios[index] || index < readyVoices ? "✅" : "⏳"} ElevenLabs Voice</span>}
+              <span className={index < readyImages ? "text-emerald-300" : "text-gray-500"}>
+                {index < readyImages ? "✅" : "⏳"} Image
+              </span>
+              <span className={index < readyVideos ? "text-emerald-300" : "text-gray-500"}>
+                {index < readyVideos ? "✅" : "⏳"} Silent Video
+              </span>
+              {voiceScripts[index]?.trim() && (
+                <span className={assetsRef.current.voices[index] ? "text-emerald-300" : "text-gray-500"}>
+                  {assetsRef.current.voices[index] ? "✅" : "⏳"} ElevenLabs Voice
+                </span>
+              )}
             </div>
           </div>
         ))}

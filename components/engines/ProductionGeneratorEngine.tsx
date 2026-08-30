@@ -31,6 +31,25 @@ function getError(result: any, fallback: string) {
   return String(result?.message || result?.error || fallback);
 }
 
+function hashPlanKey(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+type NavigatorWithLocks = Navigator & {
+  locks?: {
+    request: (
+      name: string,
+      options: { ifAvailable: true },
+      callback: (lock: unknown | null) => Promise<void> | void
+    ) => Promise<void>;
+  };
+};
+
 export default function ProductionGeneratorEngine({
   duration = 30,
   sceneDurations = [],
@@ -58,9 +77,6 @@ export default function ProductionGeneratorEngine({
   const generationTokenRef = useRef(0);
   const activePlanRef = useRef<string | null>(null);
 
-  // Parent callbacks are recreated on every AIDirector render.
-  // Keep the latest callbacks in refs so a parent state update NEVER
-  // cancels an in-flight production job.
   const onImageGeneratedRef = useRef(onImageGenerated);
   const onVideoGeneratedRef = useRef(onVideoGenerated);
   const onVoiceGeneratedRef = useRef(onVoiceGenerated);
@@ -73,7 +89,6 @@ export default function ProductionGeneratorEngine({
     onGenerationErrorRef.current = onGenerationError;
   });
 
-  // Keep the latest generated assets available to the long-running job.
   const assetsRef = useRef({
     images: generatedImages,
     videos: generatedVideos,
@@ -94,18 +109,20 @@ export default function ProductionGeneratorEngine({
     [sceneDurations]
   );
   const scenesCount = durations.length;
-  const expectedSceneCount = requestedDuration > 0
-    ? Math.ceil(requestedDuration / MAX_SCENE_DURATION)
-    : 0;
+  const expectedSceneCount =
+    requestedDuration > 0
+      ? Math.ceil(requestedDuration / MAX_SCENE_DURATION)
+      : 0;
 
   const planKey = useMemo(
-    () => JSON.stringify({
-      requestedDuration,
-      durations,
-      imagePrompts,
-      videoPrompts,
-      voiceScripts,
-    }),
+    () =>
+      JSON.stringify({
+        requestedDuration,
+        durations,
+        imagePrompts,
+        videoPrompts,
+        voiceScripts,
+      }),
     [requestedDuration, durations, imagePrompts, videoPrompts, voiceScripts]
   );
 
@@ -145,9 +162,6 @@ export default function ProductionGeneratorEngine({
     const token = ++generationTokenRef.current;
     let cancelled = false;
 
-    runningRef.current = true;
-    activePlanRef.current = planKey;
-    setRunning(true);
     setError("");
 
     const isCancelled = () =>
@@ -161,15 +175,16 @@ export default function ProductionGeneratorEngine({
     };
 
     const run = async () => {
+      runningRef.current = true;
+      activePlanRef.current = planKey;
+      setRunning(true);
+
       try {
         for (let index = 0; index < scenesCount; index++) {
           if (isCancelled()) return;
 
           setCurrentScene(index + 1);
 
-          // ==================================================
-          // 1. IMAGE — reuse the exact existing asset first.
-          // ==================================================
           let imageUrl = assetsRef.current.images[index] || "";
 
           if (!imageUrl) {
@@ -178,7 +193,9 @@ export default function ProductionGeneratorEngine({
               throw new Error(`Scene ${index + 1}: image prompt is empty.`);
             }
 
-            console.log(`🖼️ Scene ${index + 1}/${scenesCount}: Cloudflare image`);
+            console.log(
+              `🖼️ Scene ${index + 1}/${scenesCount}: Cloudflare image`
+            );
 
             const response = await fetch("/api/generate-image", {
               method: "POST",
@@ -192,13 +209,18 @@ export default function ProductionGeneratorEngine({
             const result = await response.json();
             if (!response.ok || !result.success) {
               throw new Error(
-                getError(result, `Image generation failed for Scene ${index + 1}.`)
+                getError(
+                  result,
+                  `Image generation failed for Scene ${index + 1}.`
+                )
               );
             }
 
             imageUrl = result.imageUrl || result.image || "";
             if (!imageUrl) {
-              throw new Error(`Scene ${index + 1}: Cloudflare returned no image.`);
+              throw new Error(
+                `Scene ${index + 1}: Cloudflare returned no image.`
+              );
             }
 
             assetsRef.current.images[index] = imageUrl;
@@ -211,9 +233,6 @@ export default function ProductionGeneratorEngine({
 
           if (isCancelled()) return;
 
-          // ==================================================
-          // 2. SILENT deAPI VIDEO — exact image + exact duration.
-          // ==================================================
           let videoUrl = assetsRef.current.videos[index] || "";
 
           if (!videoUrl) {
@@ -257,12 +276,17 @@ export default function ProductionGeneratorEngine({
 
             videoUrl = result.videoUrl || result.videoUri || "";
             if (!videoUrl) {
-              throw new Error(`Scene ${index + 1}: deAPI returned no video URL.`);
+              throw new Error(
+                `Scene ${index + 1}: deAPI returned no video URL.`
+              );
             }
 
             if (result.effectiveDuration != null) {
               const effective = Number(result.effectiveDuration);
-              if (!Number.isFinite(effective) || effective !== sceneDuration) {
+              if (
+                !Number.isFinite(effective) ||
+                effective !== sceneDuration
+              ) {
                 throw new Error(
                   `Scene ${index + 1}: duration mismatch. Planned ${sceneDuration}s, received ${result.effectiveDuration}s.`
                 );
@@ -279,9 +303,6 @@ export default function ProductionGeneratorEngine({
 
           if (isCancelled()) return;
 
-          // ==================================================
-          // 3. ELEVENLABS VOICE — only when dialogue exists.
-          // ==================================================
           const script = voiceScripts[index]?.trim() || "";
 
           if (script) {
@@ -304,13 +325,18 @@ export default function ProductionGeneratorEngine({
               const result = await response.json();
               if (!response.ok || !result.success) {
                 throw new Error(
-                  getError(result, `Voice generation failed for Scene ${index + 1}.`)
+                  getError(
+                    result,
+                    `Voice generation failed for Scene ${index + 1}.`
+                  )
                 );
               }
 
               audioUrl = result.audioUrl || result.audio || "";
               if (!audioUrl) {
-                throw new Error(`Scene ${index + 1}: ElevenLabs returned no audio.`);
+                throw new Error(
+                  `Scene ${index + 1}: ElevenLabs returned no audio.`
+                );
               }
 
               assetsRef.current.voices[index] = audioUrl;
@@ -346,23 +372,49 @@ export default function ProductionGeneratorEngine({
       }
     };
 
-    void run();
+    const startProduction = async () => {
+      if (typeof window === "undefined") {
+        await run();
+        return;
+      }
 
-    // IMPORTANT:
-    // React StrictMode and normal parent rerenders can run effect cleanup
-    // while the same production plan is still in flight. Never cancel the
-    // active request in that case, otherwise the next effect starts Scene 1
-    // again and submits the same deAPI job twice.
+      const navigatorWithLocks = navigator as NavigatorWithLocks;
+
+      if (!navigatorWithLocks.locks?.request) {
+        await run();
+        return;
+      }
+
+      const lockName =
+        `ai-director-production-${hashPlanKey(planKey)}`;
+
+      await navigatorWithLocks.locks.request(
+        lockName,
+        { ifAvailable: true },
+        async (lock) => {
+          if (!lock) {
+            console.log(
+              "⏭️ Production already running for this plan; duplicate start prevented."
+            );
+            return;
+          }
+
+          await run();
+        }
+      );
+    };
+
+    void startProduction();
+
     return () => {
       if (activePlanRef.current !== planKey) return;
 
-      // If the same plan is being cleaned up/re-mounted, leave the running
-      // job untouched. A genuinely new plan will have a different planKey
-      // and its previous effect will be cancelled by the next effect setup.
-      if (finishedPlanRef.current === planKey || failedPlanRef.current === planKey) {
+      if (
+        finishedPlanRef.current === planKey ||
+        failedPlanRef.current === planKey
+      ) {
         runningRef.current = false;
         activePlanRef.current = null;
-        return;
       }
     };
   }, [planKey, planValid]);
@@ -433,14 +485,32 @@ export default function ProductionGeneratorEngine({
               </span>
             </div>
             <div className="mt-2 flex flex-wrap gap-3">
-              <span className={index < readyImages ? "text-emerald-300" : "text-gray-500"}>
+              <span
+                className={
+                  index < readyImages
+                    ? "text-emerald-300"
+                    : "text-gray-500"
+                }
+              >
                 {index < readyImages ? "✅" : "⏳"} Image
               </span>
-              <span className={index < readyVideos ? "text-emerald-300" : "text-gray-500"}>
+              <span
+                className={
+                  index < readyVideos
+                    ? "text-emerald-300"
+                    : "text-gray-500"
+                }
+              >
                 {index < readyVideos ? "✅" : "⏳"} Silent Video
               </span>
               {voiceScripts[index]?.trim() && (
-                <span className={assetsRef.current.voices[index] ? "text-emerald-300" : "text-gray-500"}>
+                <span
+                  className={
+                    assetsRef.current.voices[index]
+                      ? "text-emerald-300"
+                      : "text-gray-500"
+                  }
+                >
                   {assetsRef.current.voices[index] ? "✅" : "⏳"} ElevenLabs Voice
                 </span>
               )}

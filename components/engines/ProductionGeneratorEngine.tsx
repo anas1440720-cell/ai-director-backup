@@ -407,12 +407,9 @@ export default function ProductionGeneratorEngine({
     void startProduction();
 
     return () => {
-      if (activePlanRef.current !== planKey) return;
+      cancelled = true;
 
-      if (
-        finishedPlanRef.current === planKey ||
-        failedPlanRef.current === planKey
-      ) {
+      if (activePlanRef.current === planKey) {
         runningRef.current = false;
         activePlanRef.current = null;
       }

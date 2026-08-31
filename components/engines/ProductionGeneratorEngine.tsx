@@ -372,39 +372,7 @@ export default function ProductionGeneratorEngine({
       }
     };
 
-    const startProduction = async () => {
-      if (typeof window === "undefined") {
-        await run();
-        return;
-      }
-
-      const navigatorWithLocks = navigator as NavigatorWithLocks;
-
-      if (!navigatorWithLocks.locks?.request) {
-        await run();
-        return;
-      }
-
-      const lockName =
-        `ai-director-production-${hashPlanKey(planKey)}`;
-
-      await navigatorWithLocks.locks.request(
-        lockName,
-        { ifAvailable: true },
-        async (lock) => {
-          if (!lock) {
-            console.log(
-              "⏭️ Production already running for this plan; duplicate start prevented."
-            );
-            return;
-          }
-
-          await run();
-        }
-      );
-    };
-
-    void startProduction();
+    void run();
 
     return () => {
       cancelled = true;
